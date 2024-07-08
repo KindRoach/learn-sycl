@@ -7,15 +7,17 @@
 
 using namespace sycl;
 
-constexpr size_t N = 64;
-constexpr size_t B = 4;
+constexpr size_t N = 2048;
+constexpr size_t B = 16;
 
 void matrix_multiply(const std::vector<float> &a, const std::vector<float> &b, std::vector<float> &c) {
     for (int i = 0; i < N; ++i) {
         for (int j = 0; j < N; ++j) {
+            float sum = 0;
             for (int k = 0; k < N; ++k) {
-                c[i * N + j] += a[i * N + k] * b[k * N + j];
+                sum += a[i * N + k] * b[k * N + j];
             }
+            c[i * N + j] = sum;
         }
     }
 }
@@ -23,7 +25,6 @@ void matrix_multiply(const std::vector<float> &a, const std::vector<float> &b, s
 void matrix_multiply(
     queue &q,
     const std::vector<float> &a, const std::vector<float> &b, std::vector<float> &c) {
-
     // Create buffers associated with inputs and output
     buffer<float, 2> a_buf(a.data(), range<2>(N, N)),
             b_buf(b.data(), range<2>(N, N)),
@@ -33,15 +34,17 @@ void matrix_multiply(
     q.submit([&](handler &h) {
         accessor a{a_buf, h, read_only};
         accessor b{b_buf, h, read_only};
-        accessor c{c_buf, h, read_write};
+        accessor c{c_buf, h, write_only, no_init};
 
         // BEGIN CODE SNIP
         h.parallel_for(range{N, N}, [=](id<2> idx) {
-            int j = idx[0];
-            int i = idx[1];
+            int i = idx[0];
+            int j = idx[1];
+            float sum = 0;
             for (int k = 0; k < N; ++k) {
-                c[j][i] += a[j][k] * b[k][i];
+                sum += a[i][k] * b[k][j];
             }
+            c[i][j] = sum;
         });
         // END CODE SNIP
     });
@@ -50,7 +53,6 @@ void matrix_multiply(
 void matrix_multiply_nd_range(
     queue q,
     const std::vector<float> &a, const std::vector<float> &b, std::vector<float> &c) {
-
     // Create buffers associated with inputs and output
     buffer<float, 2> a_buf(a.data(), range<2>(N, N)),
             b_buf(b.data(), range<2>(N, N)),
@@ -60,18 +62,20 @@ void matrix_multiply_nd_range(
     q.submit([&](handler &h) {
         accessor a{a_buf, h, read_only};
         accessor b{b_buf, h, read_only};
-        accessor c{c_buf, h, read_write};
+        accessor c{c_buf, h, write_only, no_init};
 
         // BEGIN CODE SNIP
         range global{N, N};
         range local{B, B};
         h.parallel_for(nd_range{global, local}, [=](nd_item<2> it) {
-            int j = it.get_global_id(0);
-            int i = it.get_global_id(1);
+            int i = it.get_global_id(0);
+            int j = it.get_global_id(1);
 
+            float sum = 0;
             for (int k = 0; k < N; ++k) {
-                c[j][i] += a[j][k] * b[k][i];
+                sum += a[i][k] * b[k][j];
             }
+            c[i][j] = sum;
         });
         // END CODE SNIP
     });
