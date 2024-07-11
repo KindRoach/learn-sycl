@@ -38,15 +38,15 @@ void test_performance() {
     std::vector<float> a(N), b(N), c(N);
 
     std::cout << "CPU single core: ";
-    measureExecutionTime([&] { vector_add(a, b, c); });
+    benchmark_func([&] { vector_add(a, b, c); });
 
     std::cout << "CPU SYCL: ";
     queue cpu_q{cpu_selector_v};
-    measureExecutionTime([&] { vector_add(cpu_q, a, b, c); });
+    benchmark_func([&] { vector_add(cpu_q, a, b, c); });
 
     std::cout << "GPU: ";
     queue gpu_q{gpu_selector_v};
-    measureExecutionTime([&] { vector_add(gpu_q, a, b, c); });
+    benchmark_func([&] { vector_add(gpu_q, a, b, c); });
 }
 
 void test_acc() {

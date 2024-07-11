@@ -7,7 +7,7 @@
 
 using namespace sycl;
 
-constexpr size_t N = 2048;
+constexpr size_t N = 512;
 constexpr size_t B = 16;
 
 void matrix_multiply(const std::vector<float> &a, const std::vector<float> &b, std::vector<float> &c) {
@@ -85,21 +85,21 @@ void test_perfomance() {
     std::vector<float> a(N * N), b(N * N), c(N * N);
 
     std::cout << "CPU single core: ";
-    measureExecutionTime([&] { matrix_multiply(a, b, c); });
+    benchmark_func([&] { matrix_multiply(a, b, c); });
 
     std::cout << "CPU SYCL bais: ";
     queue cpu_q{cpu_selector_v};
-    measureExecutionTime([&] { matrix_multiply(cpu_q, a, b, c); });
+    benchmark_func([&] { matrix_multiply(cpu_q, a, b, c); });
 
     std::cout << "CPU SYCL ND-range: ";
-    measureExecutionTime([&] { matrix_multiply_nd_range(cpu_q, a, b, c); });
+    benchmark_func([&] { matrix_multiply_nd_range(cpu_q, a, b, c); });
 
     std::cout << "GPU basic: ";
     queue gpu_q{gpu_selector_v};
-    measureExecutionTime([&] { matrix_multiply(gpu_q, a, b, c); });
+    benchmark_func([&] { matrix_multiply(gpu_q, a, b, c); });
 
     std::cout << "GPU ND-range: ";
-    measureExecutionTime([&] { matrix_multiply_nd_range(gpu_q, a, b, c); });
+    benchmark_func([&] { matrix_multiply_nd_range(gpu_q, a, b, c); });
 }
 
 void test_acc() {
