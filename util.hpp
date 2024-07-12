@@ -4,14 +4,14 @@
 #include <functional>
 #include <iostream>
 
-inline void print_human_readble_timeusage(long long avgDuration) {
+inline void print_human_readble_timeusage(double throughput, long long avgDurationMicroSec) {
     // Print human readable message
-    if (avgDuration < 1000) {
-        std::cout << avgDuration << " microseconds" << std::endl;
-    } else if (avgDuration < 1000000) {
-        std::cout << avgDuration / 1000.0 << " milliseconds" << std::endl;
+    if (avgDurationMicroSec < 1000) {
+        std::cout << throughput << " iter/s @ avg: " << avgDurationMicroSec << " microseconds" << std::endl;
+    } else if (avgDurationMicroSec < 1000000) {
+        std::cout << throughput << " iter/s @ avg: " << avgDurationMicroSec / 1000.0 << " milliseconds" << std::endl;
     } else {
-        std::cout << avgDuration / 1000000.0 << " seconds" << std::endl;
+        std::cout << throughput << " iter/s @ avg: " << avgDurationMicroSec / 1000000.0 << " seconds" << std::endl;
     }
 }
 
@@ -21,10 +21,11 @@ inline void benchmark_func(const std::function<void()> &func, int numIterations)
         func(); // Call the function
     }
     auto end = std::chrono::high_resolution_clock::now();
-    auto totalDuration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
-    auto avgDuration = totalDuration / numIterations;
+    auto totalDuration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
 
-    print_human_readble_timeusage(avgDuration);
+    auto throughput = numIterations / (totalDuration.count() / 1000000.0);
+    auto avgDuration = totalDuration.count() / numIterations;
+    print_human_readble_timeusage(throughput, avgDuration);
 }
 
 inline void benchmark_func(const std::function<void()> &func, std::chrono::seconds duration) {
@@ -38,15 +39,16 @@ inline void benchmark_func(const std::function<void()> &func, std::chrono::secon
     }
 
     auto actualEnd = std::chrono::high_resolution_clock::now();
-    auto totalDuration = std::chrono::duration_cast<std::chrono::microseconds>(actualEnd - start).count();
-    auto avgDuration = totalDuration / numIterations;
+    auto totalDuration = std::chrono::duration_cast<std::chrono::microseconds>(actualEnd - start);
 
-    print_human_readble_timeusage(avgDuration);
+    auto throughput = numIterations / (totalDuration.count() / 1000000.0);
+    auto avgDuration = totalDuration.count() / numIterations;
+    print_human_readble_timeusage(throughput, avgDuration);
 }
 
 
 inline void benchmark_func(const std::function<void()> &func) {
-    benchmark_func(func, std::chrono::seconds(60));
+    benchmark_func(func, std::chrono::seconds(10));
 }
 
 inline std::chrono::microseconds benchmark_sycl_kernel(
@@ -58,22 +60,25 @@ inline std::chrono::microseconds benchmark_sycl_kernel(
     queue.wait();
     auto end = std::chrono::high_resolution_clock::now();
 
-    return std::chrono::duration_cast<std::chrono::seconds>(end - start);
+    return std::chrono::duration_cast<std::chrono::microseconds>(end - start);
 }
 
 inline void benchmark_sycl_kernel(
     const std::function<void(sycl::queue &)> &submitKernel, sycl::queue &queue, std::chrono::seconds duration) {
+    // Wram up
+    benchmark_sycl_kernel(submitKernel, queue, 1);
+
     auto iter1_sec = benchmark_sycl_kernel(submitKernel, queue, 1).count() / 1000000.0;
     auto iter100_sec = benchmark_sycl_kernel(submitKernel, queue, 100).count() / 1000000.0;
     auto sec_per_iter = (iter100_sec - iter1_sec) / 99.0;
-
     auto numIterations = static_cast<int>(duration.count() / sec_per_iter);
-    auto totalDuration = benchmark_sycl_kernel(submitKernel, queue, numIterations);
-    auto avgDuration = totalDuration.count() / numIterations;
 
-    print_human_readble_timeusage(avgDuration);
+    auto totalDuration = benchmark_sycl_kernel(submitKernel, queue, numIterations);
+    auto throughput = numIterations / (totalDuration.count() / 1000000.0);
+    auto avgDuration = totalDuration.count() / numIterations;
+    print_human_readble_timeusage(throughput, avgDuration);
 }
 
 inline void benchmark_sycl_kernel(const std::function<void(sycl::queue &)> &submitKernel, sycl::queue &queue) {
-    benchmark_sycl_kernel(submitKernel, queue, std::chrono::seconds(60));
+    benchmark_sycl_kernel(submitKernel, queue, std::chrono::seconds(10));
 }
