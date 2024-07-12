@@ -82,3 +82,13 @@ inline void benchmark_sycl_kernel(
 inline void benchmark_sycl_kernel(const std::function<void(sycl::queue &)> &submitKernel, sycl::queue &queue) {
     benchmark_sycl_kernel(submitKernel, queue, std::chrono::seconds(10));
 }
+
+
+inline int gpu_selector_by_cu(const sycl::device &dev) {
+    if (dev.is_gpu()) {
+        unsigned int cu = dev.get_info<sycl::info::device::max_compute_units>();
+        return static_cast<int>(cu);
+    }
+
+    return 0;
+}

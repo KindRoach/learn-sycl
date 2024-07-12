@@ -78,7 +78,7 @@ void test_perfomance() {
     benchmark_func([&] { matrix_multiply(a, b, c); });
 
     queue cpu_q{cpu_selector_v};
-    queue gpu_q{gpu_selector_v};
+    queue gpu_q{gpu_selector_by_cu};
 
     // wrap buffer lifecycle
     {
@@ -87,7 +87,7 @@ void test_perfomance() {
                 c_buf(c.data(), range<2>(N, N));
 
         std::cout << "CPU SYCL bais: ";
-        benchmark_sycl_kernel([&](queue& q) { matrix_multiply(q, a_buf, b_buf, c_buf); }, cpu_q);
+        benchmark_sycl_kernel([&](queue &q) { matrix_multiply(q, a_buf, b_buf, c_buf); }, cpu_q);
     }
 
     // wrap buffer lifecycle
@@ -97,7 +97,7 @@ void test_perfomance() {
                 c_buf(c.data(), range<2>(N, N));
 
         std::cout << "CPU SYCL ND-range: ";
-        benchmark_sycl_kernel([&](queue& q) { matrix_multiply_nd_range(q, a_buf, b_buf, c_buf); }, cpu_q);
+        benchmark_sycl_kernel([&](queue &q) { matrix_multiply_nd_range(q, a_buf, b_buf, c_buf); }, cpu_q);
     }
 
     // wrap buffer lifecycle
@@ -107,7 +107,7 @@ void test_perfomance() {
                 c_buf(c.data(), range<2>(N, N));
 
         std::cout << "GPU basic: ";
-        benchmark_sycl_kernel([&](queue& q) { matrix_multiply(q, a_buf, b_buf, c_buf); }, gpu_q);
+        benchmark_sycl_kernel([&](queue &q) { matrix_multiply(q, a_buf, b_buf, c_buf); }, gpu_q);
     }
 
     // wrap buffer lifecycle
@@ -117,7 +117,7 @@ void test_perfomance() {
                 c_buf(c.data(), range<2>(N, N));
 
         std::cout << "GPU ND-range: ";
-        benchmark_sycl_kernel([&](queue& q) { matrix_multiply_nd_range(q, a_buf, b_buf, c_buf); }, gpu_q);
+        benchmark_sycl_kernel([&](queue &q) { matrix_multiply_nd_range(q, a_buf, b_buf, c_buf); }, gpu_q);
     }
 }
 
@@ -131,7 +131,7 @@ void test_acc() {
     std::generate(b.begin(), b.end(), rng);
     std::fill(c.begin(), c.end(), 0);
 
-    queue gpu_q{gpu_selector_v};
+    queue gpu_q{gpu_selector_by_cu};
 
     // wrap buffer lifecycle
     {
