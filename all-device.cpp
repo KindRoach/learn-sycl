@@ -32,6 +32,14 @@ std::string backend_to_string(sycl::backend backend) {
     }
 }
 
+void print_sub_groups(const sycl::device &d) {
+    std::cout << "\tSubgroup sizes:";
+    for (const auto &x: d.get_info<sycl::info::device::sub_group_sizes>()) {
+        std::cout << " " << x;
+    }
+    std::cout << std::endl;
+}
+
 
 int main() {
     for (const auto &device: sycl::device::get_devices()) {
@@ -42,5 +50,6 @@ int main() {
                 << "\tBackend: " << backend_to_string(device.get_backend()) << std::endl
                 << "\tType: " << device_type_to_string(device.get_info<sycl::info::device::device_type>()) << std::endl
                 << "\tCompute Unit: " << device.get_info<sycl::info::device::max_compute_units>() << std::endl;
+        print_sub_groups(device);
     }
 }
