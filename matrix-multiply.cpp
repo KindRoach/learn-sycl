@@ -116,44 +116,81 @@ void matrix_multiply_nd_range_local_mem(
     });
 }
 
+void matrix_multiply_nd_range_group_broadcast(
+    queue &q,
+    buffer<float, 2> &a_buf, buffer<float, 2> &b_buf, buffer<float, 2> &c_buf) {
+    // Submit the kernel to the queue
+    q.submit([&](handler &h) {
+        accessor a{a_buf, h, read_only};
+        accessor b{b_buf, h, read_only};
+        accessor c{c_buf, h, write_only, no_init};
+
+        // BEGIN CODE SNIP
+        range global{N, N};
+        range local{1, B};
+        h.parallel_for(nd_range{global, local}, [=](nd_item<2> it) {
+            // Indices in the global index space:
+            int m = it.get_global_id()[0];
+            int n = it.get_global_id()[1];
+
+            // Index in the local index space:
+            int i = it.get_local_id()[1];
+
+            // Template type T is the type of data stored
+            // in the matrix
+            float sum = 0;
+            for (int t = 0; t < N; t += B) {
+                // Load the matrix tile from matrix A.
+                float tileI = a[m][t + i];
+
+                // Perform computation by broadcasting from
+                // the matrix tile and loading from matrix B
+                // in global memory.  The loop variable k
+                // describes which work-item in the sub-group
+                // to broadcast data from.
+                for (int k = 0; k < B; k++) {
+                    sum += group_broadcast(it.get_sub_group(), tileI, k) * b[t + k][n];
+                }
+            }
+
+            // Write the final result to global memory.
+            c[m][n] = sum;
+        });
+        // END CODE SNIP
+    });
+}
+
 void test_perfomance() {
     std::vector<float> a(N * N), b(N * N), c(N * N);
 
     std::cout << "CPU single core: ";
     benchmark_func([&] { matrix_multiply_naive(a, b, c); });
 
-    // wrap lifecycle
-    {
-        queue q{cpu_selector_v};
-        buffer<float, 2> a_buf(a.data(), range<2>(N, N)),
-                b_buf(b.data(), range<2>(N, N)),
-                c_buf(c.data(), range<2>(N, N));
+    queue cpu_q{cpu_selector_v};
+    queue gpu_q{gpu_selector_by_cu};
+    std::vector<std::tuple<
+        std::string,
+        std::function<void(queue &, buffer<float, 2> &, buffer<float, 2> &, buffer<float, 2> &)>,
+        queue> > tests = {
+        {"CPU SYCL", matrix_multiply, cpu_q},
+        {"CPU SYCL ND-range", matrix_multiply_nd_range, cpu_q},
+        {"CPU SYCL ND-range Local Memory", matrix_multiply_nd_range_local_mem, cpu_q},
+        {"CPU SYCL ND-range Broadcast", matrix_multiply_nd_range_group_broadcast, cpu_q},
+        {"GPU SYCL", matrix_multiply, gpu_q},
+        {"GPU SYCL ND-range", matrix_multiply_nd_range, gpu_q},
+        {"GPU SYCL ND-range Local Memory", matrix_multiply_nd_range_local_mem, gpu_q},
+        {"GPU SYCL ND-range Broadcast", matrix_multiply_nd_range_group_broadcast, gpu_q},
+    };
 
-        std::cout << "CPU SYCL bais: ";
-        benchmark_sycl_kernel([&](queue &q) { matrix_multiply(q, a_buf, b_buf, c_buf); }, q);
+    for (auto &[name,kernel, q]: tests) {
+        {
+            buffer<float, 2> a_buf(a.data(), range<2>(N, N)),
+                    b_buf(b.data(), range<2>(N, N)),
+                    c_buf(c.data(), range<2>(N, N));
 
-        std::cout << "CPU SYCL ND-range: ";
-        benchmark_sycl_kernel([&](queue &q) { matrix_multiply_nd_range(q, a_buf, b_buf, c_buf); }, q);
-
-        std::cout << "CPU SYCL ND-range Local Memory: ";
-        benchmark_sycl_kernel([&](queue &q) { matrix_multiply_nd_range_local_mem(q, a_buf, b_buf, c_buf); }, q);
-    }
-
-    // wrap lifecycle
-    {
-        queue q{gpu_selector_by_cu};
-        buffer<float, 2> a_buf(a.data(), range<2>(N, N)),
-                b_buf(b.data(), range<2>(N, N)),
-                c_buf(c.data(), range<2>(N, N));
-
-        std::cout << "GPU SYCL basic: ";
-        benchmark_sycl_kernel([&](queue &q) { matrix_multiply(q, a_buf, b_buf, c_buf); }, q);
-
-        std::cout << "GPU SYCL ND-range: ";
-        benchmark_sycl_kernel([&](queue &q) { matrix_multiply_nd_range(q, a_buf, b_buf, c_buf); }, q);
-
-        std::cout << "GPU SYCL SYCL ND-range Local Memory: ";
-        benchmark_sycl_kernel([&](queue &q) { matrix_multiply_nd_range_local_mem(q, a_buf, b_buf, c_buf); }, q);
+            std::cout << name << ": ";
+            benchmark_sycl_kernel([&](queue &q) { kernel(q, a_buf, b_buf, c_buf); }, q);
+        }
     }
 }
 
@@ -178,9 +215,11 @@ void test_acc() {
         {"CPU SYCL", matrix_multiply, cpu_q},
         {"CPU SYCL ND-range", matrix_multiply_nd_range, cpu_q},
         {"CPU SYCL ND-range Local Memory", matrix_multiply_nd_range_local_mem, cpu_q},
+        {"CPU SYCL ND-range Broadcast", matrix_multiply_nd_range_group_broadcast, cpu_q},
         {"GPU SYCL", matrix_multiply, gpu_q},
         {"GPU SYCL ND-range", matrix_multiply_nd_range, gpu_q},
-        {"GPU SYCL ND-range Local Memory", matrix_multiply_nd_range_local_mem, gpu_q}
+        {"GPU SYCL ND-range Local Memory", matrix_multiply_nd_range_local_mem, gpu_q},
+        {"GPU SYCL ND-range Broadcast", matrix_multiply_nd_range_group_broadcast, gpu_q},
     };
 
     for (auto &[name,kernel, q]: tests) {
@@ -192,7 +231,7 @@ void test_acc() {
 
             kernel(q, a_buf, b_buf, c_buf);
         }
-        q.wait();
+
         auto success = floatVectorEquals(c, gt);
         std::cout << name << ": " << (success ? "SUCCESS" : "FAILURE") << std::endl;
     }
