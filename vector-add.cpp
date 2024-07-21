@@ -37,21 +37,21 @@ void test_performance() {
     std::cout << "CPU single core: ";
     benchmark_func([&] { vector_add(a, b, c); });
 
-    queue cpu_q{cpu_selector_v};
-    queue gpu_q{gpu_selector_by_cu};
 
     // wrap buffer lifecycle
     {
+        queue q{cpu_selector_v};
         buffer<float, 1> a_buf{a}, b_buf{b}, c_buf{c};
         std::cout << "CPU SYCL: ";
-        benchmark_sycl_kernel([&](queue &q) { vector_add(q, a_buf, b_buf, c_buf); }, cpu_q);
+        benchmark_sycl_kernel([&](queue &q) { vector_add(q, a_buf, b_buf, c_buf); }, q);
     }
 
     // wrap buffer lifecycle
     {
+        queue q{gpu_selector_by_cu};
         buffer<float, 1> a_buf{a}, b_buf{b}, c_buf{c};
-        std::cout << "GPU: ";
-        benchmark_sycl_kernel([&](queue &q) { vector_add(q, a_buf, b_buf, c_buf); }, gpu_q);
+        std::cout << "GPU SYCL: ";
+        benchmark_sycl_kernel([&](queue &q) { vector_add(q, a_buf, b_buf, c_buf); }, q);
     }
 }
 
@@ -62,7 +62,7 @@ void test_acc() {
     std::fill(b.begin(), b.end(), 2);
     std::fill(c.begin(), c.end(), 0);
 
-    queue gpu_q{gpu_selector_v};
+    queue gpu_q{gpu_selector_by_cu};
 
     // wrap buffer lifecycle
     {

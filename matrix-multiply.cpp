@@ -71,53 +71,89 @@ void matrix_multiply_nd_range(
     });
 }
 
+void matrix_multiply_nd_range_local_mem(
+    queue &q,
+    buffer<float, 2> &a_buf, buffer<float, 2> &b_buf, buffer<float, 2> &c_buf) {
+    // Submit the kernel to the queue
+    q.submit([&](handler &h) {
+        accessor a{a_buf, h, read_only};
+        accessor b{b_buf, h, read_only};
+        accessor c{c_buf, h, write_only, no_init};
+
+        auto tile = local_accessor<float, 2>({B, B}, h);
+
+        // BEGIN CODE SNIP
+        range global{N, N};
+        range local{B, B};
+        h.parallel_for(nd_range{global, local}, [=](nd_item<2> it) {
+            int m = it.get_global_id(0);
+            int n = it.get_global_id(1);
+
+            int i = it.get_local_id(0);
+            int j = it.get_local_id(1);
+
+            float sum = 0;
+            for (int t = 0; t < N; t += B) {
+                // load the matrix tile from matrix A
+                // each work-item read one element
+                // synchronize to wait for other work-item
+                tile[i][j] = a[m][t + j];
+                group_barrier(it.get_group());
+
+                // Perform computation using the local memory
+                // tile, and matrix B in global memory.
+                for (int k = 0; k < B; k++) {
+                    sum += tile[i][k] * b[t + k][n];
+                }
+
+                // synchronize to wait for other work-item
+                group_barrier(it.get_group());
+            }
+
+            c[m][n] = sum;
+        });
+        // END CODE SNIP
+    });
+}
+
 void test_perfomance() {
     std::vector<float> a(N * N), b(N * N), c(N * N);
 
     std::cout << "CPU single core: ";
     benchmark_func([&] { matrix_multiply(a, b, c); });
 
-    queue cpu_q{cpu_selector_v};
-    queue gpu_q{gpu_selector_by_cu};
-
-    // wrap buffer lifecycle
+    // wrap lifecycle
     {
+        queue q{cpu_selector_v};
         buffer<float, 2> a_buf(a.data(), range<2>(N, N)),
                 b_buf(b.data(), range<2>(N, N)),
                 c_buf(c.data(), range<2>(N, N));
 
         std::cout << "CPU SYCL bais: ";
-        benchmark_sycl_kernel([&](queue &q) { matrix_multiply(q, a_buf, b_buf, c_buf); }, cpu_q);
-    }
-
-    // wrap buffer lifecycle
-    {
-        buffer<float, 2> a_buf(a.data(), range<2>(N, N)),
-                b_buf(b.data(), range<2>(N, N)),
-                c_buf(c.data(), range<2>(N, N));
+        benchmark_sycl_kernel([&](queue &q) { matrix_multiply(q, a_buf, b_buf, c_buf); }, q);
 
         std::cout << "CPU SYCL ND-range: ";
-        benchmark_sycl_kernel([&](queue &q) { matrix_multiply_nd_range(q, a_buf, b_buf, c_buf); }, cpu_q);
+        benchmark_sycl_kernel([&](queue &q) { matrix_multiply_nd_range(q, a_buf, b_buf, c_buf); }, q);
+
+        std::cout << "CPU SYCL ND-range Local Memory: ";
+        benchmark_sycl_kernel([&](queue &q) { matrix_multiply_nd_range_local_mem(q, a_buf, b_buf, c_buf); }, q);
     }
 
-    // wrap buffer lifecycle
+    // wrap lifecycle
     {
+        queue q{gpu_selector_by_cu};
         buffer<float, 2> a_buf(a.data(), range<2>(N, N)),
                 b_buf(b.data(), range<2>(N, N)),
                 c_buf(c.data(), range<2>(N, N));
 
-        std::cout << "GPU basic: ";
-        benchmark_sycl_kernel([&](queue &q) { matrix_multiply(q, a_buf, b_buf, c_buf); }, gpu_q);
-    }
+        std::cout << "GPU SYCL basic: ";
+        benchmark_sycl_kernel([&](queue &q) { matrix_multiply(q, a_buf, b_buf, c_buf); }, q);
 
-    // wrap buffer lifecycle
-    {
-        buffer<float, 2> a_buf(a.data(), range<2>(N, N)),
-                b_buf(b.data(), range<2>(N, N)),
-                c_buf(c.data(), range<2>(N, N));
+        std::cout << "GPU SYCL ND-range: ";
+        benchmark_sycl_kernel([&](queue &q) { matrix_multiply_nd_range(q, a_buf, b_buf, c_buf); }, q);
 
-        std::cout << "GPU ND-range: ";
-        benchmark_sycl_kernel([&](queue &q) { matrix_multiply_nd_range(q, a_buf, b_buf, c_buf); }, gpu_q);
+        std::cout << "GPU SYCL SYCL ND-range Local Memory: ";
+        benchmark_sycl_kernel([&](queue &q) { matrix_multiply_nd_range_local_mem(q, a_buf, b_buf, c_buf); }, q);
     }
 }
 
@@ -140,7 +176,7 @@ void test_acc() {
                 b_buf(b.data(), range<2>(N, N)),
                 c_buf(c.data(), range<2>(N, N));
 
-        matrix_multiply_nd_range(gpu_q, a_buf, b_buf, c_buf);
+        matrix_multiply_nd_range_local_mem(gpu_q, a_buf, b_buf, c_buf);
     }
 
     // Check that all outputs match serial execution

@@ -51,8 +51,10 @@ inline void benchmark_func(const std::function<void()> &func) {
     benchmark_func(func, std::chrono::seconds(10));
 }
 
+using sycl_kernel = std::function<void(sycl::queue &)>;
+
 inline std::chrono::microseconds benchmark_sycl_kernel(
-    const std::function<void(sycl::queue &)> &submitKernel, sycl::queue &queue, int numIterations) {
+    const sycl_kernel &submitKernel, sycl::queue &queue, int numIterations) {
     auto start = std::chrono::high_resolution_clock::now();
     for (int i = 0; i < numIterations; ++i) {
         submitKernel(queue); // Call the function
@@ -64,7 +66,7 @@ inline std::chrono::microseconds benchmark_sycl_kernel(
 }
 
 inline void benchmark_sycl_kernel(
-    const std::function<void(sycl::queue &)> &submitKernel, sycl::queue &queue, std::chrono::seconds duration) {
+    const sycl_kernel &submitKernel, sycl::queue &queue, std::chrono::seconds duration) {
     // Wram up
     benchmark_sycl_kernel(submitKernel, queue, 1);
 
@@ -79,10 +81,23 @@ inline void benchmark_sycl_kernel(
     print_human_readble_timeusage(throughput, avgDuration);
 }
 
-inline void benchmark_sycl_kernel(const std::function<void(sycl::queue &)> &submitKernel, sycl::queue &queue) {
+inline void benchmark_sycl_kernel(const sycl_kernel &submitKernel, sycl::queue &queue) {
     benchmark_sycl_kernel(submitKernel, queue, std::chrono::seconds(10));
 }
 
+inline bool floatVectorEquals(const std::vector<float> &v1, const std::vector<float> &v2, float tolerance = 1e-6f) {
+    if (v1.size() != v2.size()) {
+        return false;
+    }
+
+    for (size_t i = 0; i < v1.size(); ++i) {
+        if (std::fabs(v1[i] - v2[i]) > tolerance) {
+            return false;
+        }
+    }
+
+    return true;
+}
 
 inline int gpu_selector_by_cu(const sycl::device &dev) {
     int priorty = 0;
