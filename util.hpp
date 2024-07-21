@@ -85,13 +85,13 @@ inline void benchmark_sycl_kernel(const sycl_kernel &submitKernel, sycl::queue &
     benchmark_sycl_kernel(submitKernel, queue, std::chrono::seconds(10));
 }
 
-inline bool floatVectorEquals(const std::vector<float> &v1, const std::vector<float> &v2, float tolerance = 1e-6f) {
+inline bool floatVectorEquals(const std::vector<float> &v1, const std::vector<float> &v2, float tolerance = 1e-5f) {
     if (v1.size() != v2.size()) {
         return false;
     }
 
     for (size_t i = 0; i < v1.size(); ++i) {
-        if (std::fabs(v1[i] - v2[i]) > tolerance) {
+        if (std::abs(v1[i] - v2[i]) / v1[i] > tolerance) {
             return false;
         }
     }

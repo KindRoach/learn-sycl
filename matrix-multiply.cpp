@@ -10,7 +10,7 @@ using namespace sycl;
 constexpr size_t N = 512;
 constexpr size_t B = 16;
 
-void matrix_multiply(const std::vector<float> &a, const std::vector<float> &b, std::vector<float> &c) {
+void matrix_multiply_naive(const std::vector<float> &a, const std::vector<float> &b, std::vector<float> &c) {
     for (int i = 0; i < N; ++i) {
         for (int j = 0; j < N; ++j) {
             float sum = 0;
@@ -120,7 +120,7 @@ void test_perfomance() {
     std::vector<float> a(N * N), b(N * N), c(N * N);
 
     std::cout << "CPU single core: ";
-    benchmark_func([&] { matrix_multiply(a, b, c); });
+    benchmark_func([&] { matrix_multiply_naive(a, b, c); });
 
     // wrap lifecycle
     {
@@ -159,40 +159,43 @@ void test_perfomance() {
 
 void test_acc() {
     // Initialize input and output memory on the host
-    std::vector<float> a(N * N), b(N * N), c(N * N);
+    std::vector<float> a(N * N), b(N * N), c(N * N), gt(N * N);
     std::default_random_engine gen(42);
     std::uniform_real_distribution<float> dist(0.0, 1.0);
     auto rng = [&]() { return dist(gen); };
     std::generate(a.begin(), a.end(), rng);
     std::generate(b.begin(), b.end(), rng);
-    std::fill(c.begin(), c.end(), 0);
 
+    // calculate groud truth
+    matrix_multiply_naive(a, b, gt);
+
+    queue cpu_q{cpu_selector_v};
     queue gpu_q{gpu_selector_by_cu};
+    std::vector<std::tuple<
+        std::string,
+        std::function<void(queue &, buffer<float, 2> &, buffer<float, 2> &, buffer<float, 2> &)>,
+        queue> > tests = {
+        {"CPU SYCL", matrix_multiply, cpu_q},
+        {"CPU SYCL ND-range", matrix_multiply_nd_range, cpu_q},
+        {"CPU SYCL ND-range Local Memory", matrix_multiply_nd_range_local_mem, cpu_q},
+        {"GPU SYCL", matrix_multiply, gpu_q},
+        {"GPU SYCL ND-range", matrix_multiply_nd_range, gpu_q},
+        {"GPU SYCL ND-range Local Memory", matrix_multiply_nd_range_local_mem, gpu_q}
+    };
 
-    // wrap buffer lifecycle
-    {
-        // Create buffers associated with inputs and output
-        buffer<float, 2> a_buf(a.data(), range<2>(N, N)),
-                b_buf(b.data(), range<2>(N, N)),
-                c_buf(c.data(), range<2>(N, N));
+    for (auto &[name,kernel, q]: tests) {
+        {
+            std::fill(c.begin(), c.end(), 0);
+            buffer<float, 2> a_buf(a.data(), range<2>(N, N)),
+                    b_buf(b.data(), range<2>(N, N)),
+                    c_buf(c.data(), range<2>(N, N));
 
-        matrix_multiply_nd_range_local_mem(gpu_q, a_buf, b_buf, c_buf);
-    }
-
-    // Check that all outputs match serial execution
-    bool passed = true;
-    for (int i = 0; i < N; ++i) {
-        for (int j = 0; j < N; ++j) {
-            float gold = 0;
-            for (int k = 0; k < N; ++k) {
-                gold += a[i * N + k] * b[k * N + j];
-            }
-            if (std::abs(gold - c[i * N + j]) / gold > 1.0E-05) {
-                passed = false;
-            }
+            kernel(q, a_buf, b_buf, c_buf);
         }
+        q.wait();
+        auto success = floatVectorEquals(c, gt);
+        std::cout << name << ": " << (success ? "SUCCESS" : "FAILURE") << std::endl;
     }
-    std::cout << (passed ? "SUCCESS" : "FAILURE") << std::endl;
 }
 
 
