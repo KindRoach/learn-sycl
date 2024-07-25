@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.22)
 
 project(LearnSYCL LANGUAGES CXX)
 
+set(CMAKE_CXX_STANDARD 20)
+
 find_package(IntelSYCL REQUIRED)
 
 # Get a list of all .cpp files in the root directory

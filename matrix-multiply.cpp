@@ -71,7 +71,7 @@ void matrix_multiply_nd_range(
     });
 }
 
-void matrix_multiply_nd_range_local_mem(
+void matrix_multiply_nd_range_group_local_mem(
     queue &q,
     buffer<float, 2> &a_buf, buffer<float, 2> &b_buf, buffer<float, 2> &c_buf) {
     // Submit the kernel to the queue
@@ -125,9 +125,11 @@ void matrix_multiply_nd_range_group_broadcast(
         accessor b{b_buf, h, read_only};
         accessor c{c_buf, h, write_only, no_init};
 
+        size_t tile_size = B;
+
         // BEGIN CODE SNIP
         range global{N, N};
-        range local{1, B};
+        range local{1, tile_size};
         h.parallel_for(nd_range{global, local}, [=](nd_item<2> it) {
             // Indices in the global index space:
             int m = it.get_global_id()[0];
@@ -139,7 +141,7 @@ void matrix_multiply_nd_range_group_broadcast(
             // Template type T is the type of data stored
             // in the matrix
             float sum = 0;
-            for (int t = 0; t < N; t += B) {
+            for (int t = 0; t < N; t += tile_size) {
                 // Load the matrix tile from matrix A.
                 float tileI = a[m][t + i];
 
@@ -148,8 +150,8 @@ void matrix_multiply_nd_range_group_broadcast(
                 // in global memory.  The loop variable k
                 // describes which work-item in the sub-group
                 // to broadcast data from.
-                for (int k = 0; k < B; k++) {
-                    sum += group_broadcast(it.get_sub_group(), tileI, k) * b[t + k][n];
+                for (int k = 0; k < tile_size; k++) {
+                    sum += group_broadcast(it.get_group(), tileI, k) * b[t + k][n];
                 }
             }
 
@@ -174,11 +176,11 @@ void test_perfomance() {
         queue> > tests = {
         {"CPU SYCL", matrix_multiply, cpu_q},
         {"CPU SYCL ND-range", matrix_multiply_nd_range, cpu_q},
-        {"CPU SYCL ND-range Local Memory", matrix_multiply_nd_range_local_mem, cpu_q},
+        {"CPU SYCL ND-range Local Memory", matrix_multiply_nd_range_group_local_mem, cpu_q},
         {"CPU SYCL ND-range Broadcast", matrix_multiply_nd_range_group_broadcast, cpu_q},
         {"GPU SYCL", matrix_multiply, gpu_q},
         {"GPU SYCL ND-range", matrix_multiply_nd_range, gpu_q},
-        {"GPU SYCL ND-range Local Memory", matrix_multiply_nd_range_local_mem, gpu_q},
+        {"GPU SYCL ND-range Local Memory", matrix_multiply_nd_range_group_local_mem, gpu_q},
         {"GPU SYCL ND-range Broadcast", matrix_multiply_nd_range_group_broadcast, gpu_q},
     };
 
@@ -214,11 +216,11 @@ void test_acc() {
         queue> > tests = {
         {"CPU SYCL", matrix_multiply, cpu_q},
         {"CPU SYCL ND-range", matrix_multiply_nd_range, cpu_q},
-        {"CPU SYCL ND-range Local Memory", matrix_multiply_nd_range_local_mem, cpu_q},
+        {"CPU SYCL ND-range Local Memory", matrix_multiply_nd_range_group_local_mem, cpu_q},
         {"CPU SYCL ND-range Broadcast", matrix_multiply_nd_range_group_broadcast, cpu_q},
         {"GPU SYCL", matrix_multiply, gpu_q},
         {"GPU SYCL ND-range", matrix_multiply_nd_range, gpu_q},
-        {"GPU SYCL ND-range Local Memory", matrix_multiply_nd_range_local_mem, gpu_q},
+        {"GPU SYCL ND-range Local Memory", matrix_multiply_nd_range_group_local_mem, gpu_q},
         {"GPU SYCL ND-range Broadcast", matrix_multiply_nd_range_group_broadcast, gpu_q},
     };
 
