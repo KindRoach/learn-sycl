@@ -138,8 +138,95 @@ void matrix_multiply_nd_range_group_broadcast(
             // Index in the local index space:
             int i = it.get_local_id()[1];
 
-            // Template type T is the type of data stored
-            // in the matrix
+            float sum = 0;
+            for (int t = 0; t < N; t += tile_size) {
+                // Load the matrix tile from matrix A.
+                float tileI = a[m][t + i];
+
+                // Perform computation by broadcasting from
+                // the matrix tile and loading from matrix B
+                // in global memory.  The loop variable k
+                // describes which work-item in the work-group
+                // to broadcast data from.
+                for (int k = 0; k < tile_size; k++) {
+                    sum += group_broadcast(it.get_group(), tileI, k) * b[t + k][n];
+                }
+            }
+
+            // Write the final result to global memory.
+            c[m][n] = sum;
+        });
+        // END CODE SNIP
+    });
+}
+
+void matrix_multiply_nd_range_sub_group_local_mem(
+    queue &q,
+    buffer<float, 2> &a_buf, buffer<float, 2> &b_buf, buffer<float, 2> &c_buf) {
+    // Submit the kernel to the queue
+    q.submit([&](handler &h) {
+        accessor a{a_buf, h, read_only};
+        accessor b{b_buf, h, read_only};
+        accessor c{c_buf, h, write_only, no_init};
+
+        size_t tile_size = 4;
+        auto tile = local_accessor<float, 1>(tile_size, h);
+
+        // BEGIN CODE SNIP
+        range global{N, N};
+        range local{1, tile_size};
+        h.parallel_for(nd_range{global, local}, [=](nd_item<2> it) {
+            int m = it.get_global_id(0);
+            int n = it.get_global_id(1);
+
+            int i = it.get_local_id(1);
+
+            float sum = 0;
+            for (int t = 0; t < N; t += tile_size) {
+                // load the matrix tile from matrix A
+                // each work-item read one element
+                // synchronize to wait for other work-item
+                tile[i] = a[m][t + i];
+                group_barrier(it.get_sub_group());
+
+                // Perform computation using the local memory
+                // tile, and matrix B in global memory.
+                for (int k = 0; k < tile_size; k++) {
+                    sum += tile[k] * b[t + k][n];
+                }
+
+                // synchronize to wait for other work-item
+                group_barrier(it.get_sub_group());
+            }
+
+            c[m][n] = sum;
+        });
+        // END CODE SNIP
+    });
+}
+
+void matrix_multiply_nd_range_sub_group_broadcast(
+    queue &q,
+    buffer<float, 2> &a_buf, buffer<float, 2> &b_buf, buffer<float, 2> &c_buf) {
+    // Submit the kernel to the queue
+    q.submit([&](handler &h) {
+        accessor a{a_buf, h, read_only};
+        accessor b{b_buf, h, read_only};
+        accessor c{c_buf, h, write_only, no_init};
+
+        size_t tile_size = 4;
+
+        // BEGIN CODE SNIP
+        range global{N, N};
+        range local{1, tile_size};
+        h.parallel_for(nd_range{global, local}, [=](nd_item<2> it) {
+            // Indices in the global index space:
+            int m = it.get_global_id()[0];
+            int n = it.get_global_id()[1];
+
+            // Index in the local index space:
+            int i = it.get_local_id()[1];
+
             float sum = 0;
             for (int t = 0; t < N; t += tile_size) {
                 // Load the matrix tile from matrix A.
@@ -151,7 +238,7 @@ void matrix_multiply_nd_range_group_broadcast(
                 // describes which work-item in the sub-group
                 // to broadcast data from.
                 for (int k = 0; k < tile_size; k++) {
-                    sum += group_broadcast(it.get_group(), tileI, k) * b[t + k][n];
+                    sum += group_broadcast(it.get_sub_group(), tileI, k) * b[t + k][n];
                 }
             }
 
@@ -176,12 +263,16 @@ void test_perfomance() {
         queue> > tests = {
         {"CPU SYCL", matrix_multiply, cpu_q},
         {"CPU SYCL ND-range", matrix_multiply_nd_range, cpu_q},
-        {"CPU SYCL ND-range Local Memory", matrix_multiply_nd_range_group_local_mem, cpu_q},
-        {"CPU SYCL ND-range Broadcast", matrix_multiply_nd_range_group_broadcast, cpu_q},
+        {"CPU SYCL ND-range Group Local Memory", matrix_multiply_nd_range_group_local_mem, cpu_q},
+        {"CPU SYCL ND-range Group Broadcast", matrix_multiply_nd_range_group_broadcast, cpu_q},
+        {"CPU SYCL ND-range Sub-group Local Memory", matrix_multiply_nd_range_sub_group_local_mem, cpu_q},
+        {"CPU SYCL ND-range Sub-group Broadcast", matrix_multiply_nd_range_sub_group_broadcast, cpu_q},
         {"GPU SYCL", matrix_multiply, gpu_q},
         {"GPU SYCL ND-range", matrix_multiply_nd_range, gpu_q},
-        {"GPU SYCL ND-range Local Memory", matrix_multiply_nd_range_group_local_mem, gpu_q},
-        {"GPU SYCL ND-range Broadcast", matrix_multiply_nd_range_group_broadcast, gpu_q},
+        {"GPU SYCL ND-range Group Local Memory", matrix_multiply_nd_range_group_local_mem, gpu_q},
+        {"GPU SYCL ND-range Group Broadcast", matrix_multiply_nd_range_group_broadcast, gpu_q},
+        {"GPU SYCL ND-range Sub-group Local Memory", matrix_multiply_nd_range_sub_group_local_mem, gpu_q},
+        {"GPU SYCL ND-range Sub-group Broadcast", matrix_multiply_nd_range_sub_group_broadcast, gpu_q},
     };
 
     for (auto &[name,kernel, q]: tests) {
@@ -216,12 +307,16 @@ void test_acc() {
         queue> > tests = {
         {"CPU SYCL", matrix_multiply, cpu_q},
         {"CPU SYCL ND-range", matrix_multiply_nd_range, cpu_q},
-        {"CPU SYCL ND-range Local Memory", matrix_multiply_nd_range_group_local_mem, cpu_q},
-        {"CPU SYCL ND-range Broadcast", matrix_multiply_nd_range_group_broadcast, cpu_q},
+        {"CPU SYCL ND-range Group Local Memory", matrix_multiply_nd_range_group_local_mem, cpu_q},
+        {"CPU SYCL ND-range Group Broadcast", matrix_multiply_nd_range_group_broadcast, cpu_q},
+        {"CPU SYCL ND-range Sub-group Local Memory", matrix_multiply_nd_range_sub_group_local_mem, cpu_q},
+        {"CPU SYCL ND-range Sub-group Broadcast", matrix_multiply_nd_range_sub_group_broadcast, cpu_q},
         {"GPU SYCL", matrix_multiply, gpu_q},
         {"GPU SYCL ND-range", matrix_multiply_nd_range, gpu_q},
-        {"GPU SYCL ND-range Local Memory", matrix_multiply_nd_range_group_local_mem, gpu_q},
-        {"GPU SYCL ND-range Broadcast", matrix_multiply_nd_range_group_broadcast, gpu_q},
+        {"GPU SYCL ND-range Group Local Memory", matrix_multiply_nd_range_group_local_mem, gpu_q},
+        {"GPU SYCL ND-range Group Broadcast", matrix_multiply_nd_range_group_broadcast, gpu_q},
+        {"GPU SYCL ND-range Sub-group Local Memory", matrix_multiply_nd_range_sub_group_local_mem, gpu_q},
+        {"GPU SYCL ND-range Sub-group Broadcast", matrix_multiply_nd_range_sub_group_broadcast, gpu_q},
     };
 
     for (auto &[name,kernel, q]: tests) {
