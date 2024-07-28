@@ -67,8 +67,7 @@ inline std::chrono::microseconds benchmark_sycl_kernel(
 
 inline void benchmark_sycl_kernel(
     const sycl_kernel &submitKernel, sycl::queue &queue, std::chrono::seconds duration) {
-    // Wram up
-    benchmark_sycl_kernel(submitKernel, queue, 1);
+    auto kb = sycl::get_kernel_bundle<sycl::bundle_state::executable>(queue.get_context());
 
     auto iter1_sec = benchmark_sycl_kernel(submitKernel, queue, 1).count() / 1000000.0;
     auto iter100_sec = benchmark_sycl_kernel(submitKernel, queue, 100).count() / 1000000.0;
