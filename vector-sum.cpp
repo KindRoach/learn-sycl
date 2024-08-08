@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <iostream>
 #include <random>
+#include <numeric>
 #include <sycl/sycl.hpp>
 
 #include "util.hpp"
@@ -52,6 +53,21 @@ void vector_sum_nd_range(queue &q, buffer<float, 1> &a_buf, buffer<float, 1> &o_
     });
 }
 
+void vector_sum_reduction(queue &q, buffer<float, 1> &a_buf, buffer<float, 1> &o_buf) {
+    // Submit the kernel to the queue
+    q.submit([&](handler &h) {
+        accessor a{a_buf, h, read_only};
+
+        auto red = reduction(o_buf, h, plus<>());
+        // BEGIN CODE SNIP
+        h.parallel_for(range{N}, red,
+                       [=](id<1> i, auto &sum) {
+                           sum += a[i];
+                       });
+        // END CODE SNIP
+    });
+}
+
 void test_acc() {
     // Initialize input and output memory on the host
     std::vector<float> a(N), o(1);
@@ -71,8 +87,10 @@ void test_acc() {
         queue> > tests = {
         {"CPU SYCL", vector_sum, cpu_q},
         {"CPU SYCL ND-range", vector_sum_nd_range, cpu_q},
+        {"CPU SYCL Reduction", vector_sum_reduction, cpu_q},
         {"GPU SYCL", vector_sum, gpu_q},
-        {"GPU SYCL ND-range", vector_sum_nd_range, gpu_q}
+        {"GPU SYCL ND-range", vector_sum_nd_range, gpu_q},
+        {"GPU SYCL Reduction", vector_sum_reduction, gpu_q}
     };
 
     for (auto &[name,kernel, q]: tests) {
@@ -103,8 +121,10 @@ void test_perfomance() {
         queue> > tests = {
         {"CPU SYCL", vector_sum, cpu_q},
         {"CPU SYCL ND-range", vector_sum_nd_range, cpu_q},
+        {"CPU SYCL Reduction", vector_sum_reduction, cpu_q},
         {"GPU SYCL", vector_sum, gpu_q},
-        {"GPU SYCL ND-range", vector_sum_nd_range, gpu_q}
+        {"GPU SYCL ND-range", vector_sum_nd_range, gpu_q},
+        {"GPU SYCL Reduction", vector_sum_reduction, gpu_q}
     };
 
     for (auto &[name,kernel, q]: tests) {
