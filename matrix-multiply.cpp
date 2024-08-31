@@ -169,30 +169,31 @@ void matrix_multiply_nd_range_sub_group_local_mem(
         accessor b{b_buf, h, read_only};
         accessor c{c_buf, h, write_only, no_init};
 
-        size_t tile_size = 4;
-        auto tile = local_accessor<float, 1>(tile_size, h);
+        size_t tile_size = B;
+        auto tile = local_accessor<float, 2>({tile_size, tile_size}, h);
 
         // BEGIN CODE SNIP
         range global{N, N};
-        range local{1, tile_size};
-        h.parallel_for(nd_range{global, local}, [=](nd_item<2> it) {
+        range local{B, B};
+        h.parallel_for(nd_range{global, local}, [=](nd_item<2> it) [[sycl::reqd_sub_group_size(B)]] {
             int m = it.get_global_id(0);
             int n = it.get_global_id(1);
 
-            int i = it.get_local_id(1);
+            int i = it.get_local_id(0);
+            int j = it.get_local_id(1);
 
             float sum = 0;
             for (int t = 0; t < N; t += tile_size) {
                 // load the matrix tile from matrix A
                 // each work-item read one element
                 // synchronize to wait for other work-item
-                tile[i] = a[m][t + i];
+                tile[i][j] = a[m][t + j];
                 group_barrier(it.get_sub_group());
 
                 // Perform computation using the local memory
                 // tile, and matrix B in global memory.
                 for (int k = 0; k < tile_size; k++) {
-                    sum += tile[k] * b[t + k][n];
+                    sum += tile[i][k] * b[t + k][n];
                 }
 
                 // synchronize to wait for other work-item
@@ -214,12 +215,12 @@ void matrix_multiply_nd_range_sub_group_broadcast(
         accessor b{b_buf, h, read_only};
         accessor c{c_buf, h, write_only, no_init};
 
-        size_t tile_size = 4;
+        size_t tile_size = B;
 
         // BEGIN CODE SNIP
         range global{N, N};
-        range local{1, tile_size};
-        h.parallel_for(nd_range{global, local}, [=](nd_item<2> it) {
+        range local{B, B};
+        h.parallel_for(nd_range{global, local}, [=](nd_item<2> it) [[sycl::reqd_sub_group_size(B)]] {
             // Indices in the global index space:
             int m = it.get_global_id()[0];
             int n = it.get_global_id()[1];
