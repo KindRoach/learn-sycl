@@ -44,7 +44,6 @@ void print_sub_groups(const sycl::device &d) {
 int main() {
     for (const auto &device: sycl::device::get_devices()) {
         std::cout << "Device: " << std::endl
-                << "\tPlatform: " << device.get_platform().get_info<sycl::info::platform::name>() << std::endl
                 << "\tName: " << device.get_info<sycl::info::device::name>() << std::endl
                 << "\tVendor: " << device.get_info<sycl::info::device::vendor>() << std::endl
                 << "\tBackend: " << backend_to_string(device.get_backend()) << std::endl
