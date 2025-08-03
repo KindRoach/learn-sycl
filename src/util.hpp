@@ -3,6 +3,7 @@
 #include <chrono>
 #include <functional>
 #include <iostream>
+#include <sycl/sycl.hpp>
 
 inline void print_human_readble_timeusage(double throughput, long long avgDurationMicroSec) {
     // Print human readable message
