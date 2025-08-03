@@ -4,6 +4,7 @@
 
 #include "util/bench.hpp"
 #include "util/device.hpp"
+#include "util/vector.hpp"
 
 using namespace sycl;
 
@@ -41,12 +42,13 @@ void vector_add(
 
 void test_performance()
 {
+    std::cout << "================= test_performance =================\n";
+
     std::vector<float> a(n_item), b(n_item), c(n_item);
 
     std::cout << "CPU single core: ";
-    benchmark_func([&]
-                   { vector_add(a, b, c); },
-                   n_loop);
+    benchmark_func(n_loop, [&]
+                   { vector_add(a, b, c); });
 
     // wrap buffer lifecycle
     {
@@ -54,9 +56,8 @@ void test_performance()
         buffer<float, 1> a_buf{a}, b_buf{b}, c_buf{c};
         std::cout << "CPU SYCL: ";
         benchmark_sycl_kernel(
-            [&](queue &q)
-            { vector_add(q, a_buf, b_buf, c_buf); },
-            q, n_loop);
+            n_loop, [&](queue &q)
+            { vector_add(q, a_buf, b_buf, c_buf); }, q);
     }
 
     // wrap buffer lifecycle
@@ -65,35 +66,38 @@ void test_performance()
         buffer<float, 1> a_buf{a}, b_buf{b}, c_buf{c};
         std::cout << "GPU SYCL: ";
         benchmark_sycl_kernel(
-            [&](queue &q)
-            { vector_add(q, a_buf, b_buf, c_buf); },
-            q, n_loop);
+            n_loop, [&](queue &q)
+            { vector_add(q, a_buf, b_buf, c_buf); }, q);
     }
 }
 
 void test_acc()
 {
-    // Initialize input and output memory on the host
-    std::vector<float> a(n_item), b(n_item), c(n_item);
-    std::fill(a.begin(), a.end(), 1);
-    std::fill(b.begin(), b.end(), 2);
-    std::fill(c.begin(), c.end(), 0);
+    std::cout << "================= test_acc =================\n";
 
-    queue gpu_q{gpu_selector_by_cu};
+    // Initialize input and output memory on the host
+    std::vector<float> a(n_item), b(n_item), c(n_item), c_ref(n_item);
+    random_fill(a, 0.0f, 1.0f);
+    random_fill(b, 0.0f, 1.0f);
+    vector_add(a, b, c_ref);
 
     // wrap buffer lifecycle
     {
+        queue q{cpu_selector_v};
         buffer<float, 1> a_buf{a}, b_buf{b}, c_buf{c};
-        vector_add(gpu_q, a_buf, b_buf, c_buf);
+        std::cout << "CPU SYCL: ";
+        vector_add(a, b, c);
     }
+    acc_check(c, c_ref);
 
-    // Check that all outputs match expected value
-    bool passed = std::all_of(
-        c.begin(), c.end(),
-        [](float i)
-        { return i == 3; });
-
-    std::cout << (passed ? "SUCCESS" : "FAILURE") << std::endl;
+    // wrap buffer lifecycle
+    {
+        queue q{gpu_selector_by_cu};
+        buffer<float, 1> a_buf{a}, b_buf{b}, c_buf{c};
+        std::cout << "GPU SYCL: ";
+        vector_add(a, b, c);
+    }
+    acc_check(c, c_ref);
 }
 
 int main(int argc, char *argv[])

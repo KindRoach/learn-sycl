@@ -11,19 +11,19 @@ void print_human_readable_timeusage(int numIterations, std::chrono::microseconds
     double avgDurationMicroSec = totalDuration.count() / static_cast<double>(numIterations);
     if (avgDurationMicroSec < 1000)
     {
-        std::cout << throughput << " iter/s @ avg: " << avgDurationMicroSec << " microseconds" << std::endl;
+        std::cout << throughput << " iter/s @ avg: " << avgDurationMicroSec << " microseconds" << "\n";
     }
     else if (avgDurationMicroSec < 1000000)
     {
-        std::cout << throughput << " iter/s @ avg: " << avgDurationMicroSec / 1000.0 << " milliseconds" << std::endl;
+        std::cout << throughput << " iter/s @ avg: " << avgDurationMicroSec / 1000.0 << " milliseconds" << "\n";
     }
     else
     {
-        std::cout << throughput << " iter/s @ avg: " << avgDurationMicroSec / 1000000.0 << " seconds" << std::endl;
+        std::cout << throughput << " iter/s @ avg: " << avgDurationMicroSec / 1000000.0 << " seconds" << "\n";
     }
 }
 
-void benchmark_func(const std::function<void()> &func, int numIterations)
+void benchmark_func(int numIterations, const std::function<void()> &func)
 {
     int warm_up_iter = 10;
     for (int i = 0; i < warm_up_iter; ++i)
@@ -44,7 +44,7 @@ void benchmark_func(const std::function<void()> &func, int numIterations)
 using sycl_kernel = std::function<void(sycl::queue &)>;
 
 void benchmark_sycl_kernel(
-    const sycl_kernel &submitKernel, sycl::queue &queue, int numIterations)
+    int numIterations, const sycl_kernel &submitKernel, sycl::queue &queue)
 {
     int warm_up_iter = 10;
     for (int i = 0; i < warm_up_iter; ++i)
