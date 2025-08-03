@@ -1,6 +1,6 @@
 #include <sycl/device.hpp>
 
-#include "device-util.hpp"
+#include "util/device.hpp"
 
 
 int main() {
