@@ -3,6 +3,7 @@
     "configurePresets": [
         {
             "name": "default",
+            "hidden": true,
             "generator": "Unix Makefiles",
             "cacheVariables": {
                 "CMAKE_C_COMPILER": "icx",
