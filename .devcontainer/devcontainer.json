@@ -1,7 +1,9 @@
 {
-    "name": "Learn-sycl Dev Container",
-    "image": "intel/oneapi:latest",
-    "runArgs": [
-        "--device=/dev/dri"
-    ]
+  "name": "Learn-sycl Dev Container",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "runArgs": [
+    "--device=/dev/dri"
+  ]
 }
