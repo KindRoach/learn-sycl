@@ -75,6 +75,10 @@ void print_sub_group_mapping_2d(sycl::queue &q) {
 int main() {
     using namespace sycl;
     queue q{gpu_selector_by_cu};
+    print_sub_group_mapping_1d<8>(q);
     print_sub_group_mapping_1d<16>(q);
+    print_sub_group_mapping_1d<32>(q);
+    print_sub_group_mapping_2d<8>(q);
     print_sub_group_mapping_2d<16>(q);
+    print_sub_group_mapping_2d<32>(q);
 }

@@ -1,4 +1,3 @@
-#include <algorithm>
 #include <iostream>
 #include <sycl/sycl.hpp>
 
