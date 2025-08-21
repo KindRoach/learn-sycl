@@ -11,15 +11,15 @@ void print_human_readable_timeusage(int numIterations, std::chrono::microseconds
     double avgDurationMicroSec = totalDuration.count() / static_cast<double>(numIterations);
     if (avgDurationMicroSec < 1000)
     {
-        std::cout << throughput << " iter/s @ avg: " << avgDurationMicroSec << " microseconds" << "\n";
+        std::cout << throughput << " iter/s @ avg: " << avgDurationMicroSec << " us" << "\n";
     }
     else if (avgDurationMicroSec < 1000000)
     {
-        std::cout << throughput << " iter/s @ avg: " << avgDurationMicroSec / 1000.0 << " milliseconds" << "\n";
+        std::cout << throughput << " iter/s @ avg: " << avgDurationMicroSec / 1000.0 << " ms" << "\n";
     }
     else
     {
-        std::cout << throughput << " iter/s @ avg: " << avgDurationMicroSec / 1000000.0 << " seconds" << "\n";
+        std::cout << throughput << " iter/s @ avg: " << avgDurationMicroSec / 1000000.0 << " s" << "\n";
     }
 }
 

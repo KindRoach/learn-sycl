@@ -8,7 +8,7 @@ find_package(IntelSYCL REQUIRED)
 
 # Get a list of all .cpp files in the root directory
 set(src_root "${CMAKE_CURRENT_SOURCE_DIR}/src")
-file(GLOB_RECURSE sources "${src_root}" "${src_root}/*.cpp")
+file(GLOB_RECURSE sources "${src_root}/*.cpp")
 
 # Create an executable target for each .cpp file
 # as the dir structure in src
