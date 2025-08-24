@@ -27,6 +27,25 @@ template<
     size_t SG_SIZE,
     size_t WI_SIZE
 >
+void access_mem_workitem_continuous_with_vec(sycl::queue &q, T *device_prt, size_t size) {
+    q.parallel_for(
+        sycl::nd_range<1>{size / WI_SIZE, WG_SIZE},
+        [=](sycl::nd_item<1> item) [[sycl::reqd_sub_group_size(SG_SIZE)]] {
+            size_t i = item.get_global_linear_id();
+            T *base = device_prt + i * WI_SIZE;
+            sycl::vec<T, WI_SIZE> vec;
+            vec.load(0, base);
+            vec += T{1};
+            vec.store(0, base);
+        });
+}
+
+template<
+    typename T,
+    size_t WG_SIZE,
+    size_t SG_SIZE,
+    size_t WI_SIZE
+>
 void access_mem_subgroup_continuous(sycl::queue &q, T *device_prt, size_t size) {
     q.parallel_for(
         sycl::nd_range<1>{size / WI_SIZE, WG_SIZE},
@@ -67,12 +86,21 @@ int main() {
 
     auto *device_prt = sycl::malloc_device<dtype>(size, q);
 
+    std::cout << "access_mem_workitem_continuous:" << std::endl;
     q.fill(device_prt, dtype{0}, size).wait();
     benchmark_sycl_kernel(1000, q, [&](sycl::queue &q) {
         access_mem_workitem_continuous<dtype, 64, 32, 16>(q, device_prt, size);
     });
     acc_check(q, device_prt, size);
 
+    std::cout << "access_mem_workitem_continuous_with_vec:" << std::endl;
+    q.fill(device_prt, dtype{0}, size).wait();
+    benchmark_sycl_kernel(1000, q, [&](sycl::queue &q) {
+        access_mem_workitem_continuous_with_vec<dtype, 64, 32, 16>(q, device_prt, size);
+    });
+    acc_check(q, device_prt, size);
+
+    std::cout << "access_mem_subgroup_continuous:" << std::endl;
     q.fill(device_prt, dtype{0}, size).wait();
     benchmark_sycl_kernel(1000, q, [&](sycl::queue &q) {
         access_mem_subgroup_continuous<dtype, 64, 32, 16>(q, device_prt, size);
