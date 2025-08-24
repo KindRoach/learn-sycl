@@ -55,8 +55,8 @@ void test_performance()
         buffer<float, 1> a_buf{a}, b_buf{b}, c_buf{c};
         std::cout << "CPU SYCL: ";
         benchmark_sycl_kernel(
-            n_loop, [&](queue &q)
-            { vector_add(q, a_buf, b_buf, c_buf); }, q);
+            n_loop, q, [&](queue &q)
+            { vector_add(q, a_buf, b_buf, c_buf); });
     }
 
     // wrap buffer lifecycle
@@ -65,8 +65,8 @@ void test_performance()
         buffer<float, 1> a_buf{a}, b_buf{b}, c_buf{c};
         std::cout << "GPU SYCL: ";
         benchmark_sycl_kernel(
-            n_loop, [&](queue &q)
-            { vector_add(q, a_buf, b_buf, c_buf); }, q);
+            n_loop, q, [&](queue &q)
+            { vector_add(q, a_buf, b_buf, c_buf); });
     }
 }
 

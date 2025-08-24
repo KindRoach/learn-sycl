@@ -44,7 +44,7 @@ void benchmark_func(int numIterations, const std::function<void()> &func)
 using sycl_kernel = std::function<void(sycl::queue &)>;
 
 void benchmark_sycl_kernel(
-    int numIterations, const sycl_kernel &submitKernel, sycl::queue &queue)
+    int numIterations, sycl::queue &queue, const sycl_kernel &submitKernel)
 {
     int warm_up_iter = 10;
     for (int i = 0; i < warm_up_iter; ++i)

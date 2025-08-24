@@ -3,7 +3,7 @@
 #include "util/device.hpp"
 
 
-template<int SG_SIZE>
+template<int WG_SIZE, int SG_SIZE>
 void print_sub_group_mapping_1d(sycl::queue &q) {
     std::cout << "=========================" << std::endl;
 
@@ -11,7 +11,7 @@ void print_sub_group_mapping_1d(sycl::queue &q) {
     q.submit([&](auto &h) {
         stream out(65536, 256, h);
         h.parallel_for(
-            nd_range(range{64}, range{64}),
+            nd_range(range{WG_SIZE * 2}, range{WG_SIZE}),
             [=](nd_item<1> it)[[sycl::reqd_sub_group_size(SG_SIZE)]] {
                 size_t group_id_x = it.get_group(0);
                 size_t local_id_x = it.get_local_id(0);
@@ -33,7 +33,7 @@ void print_sub_group_mapping_1d(sycl::queue &q) {
     }).wait();
 }
 
-template<int SG_SIZE>
+template<int WG_SIZE, int SG_SIZE>
 void print_sub_group_mapping_2d(sycl::queue &q) {
     std::cout << "=========================" << std::endl;
 
@@ -41,7 +41,7 @@ void print_sub_group_mapping_2d(sycl::queue &q) {
     q.submit([&](auto &h) {
         stream out(65536, 256, h);
         h.parallel_for(
-            nd_range(range{8, 8}, range{8, 8}),
+            nd_range(range{WG_SIZE * 2, WG_SIZE * 2}, range{WG_SIZE, WG_SIZE}),
             [=](nd_item<2> it)[[sycl::reqd_sub_group_size(SG_SIZE)]] {
                 size_t group_id_x = it.get_group(0);
                 size_t group_id_y = it.get_group(1);
@@ -69,10 +69,8 @@ void print_sub_group_mapping_2d(sycl::queue &q) {
 int main() {
     using namespace sycl;
     queue q{gpu_selector_by_cu};
-    print_sub_group_mapping_1d<8>(q);
-    print_sub_group_mapping_1d<16>(q);
-    print_sub_group_mapping_1d<32>(q);
-    print_sub_group_mapping_2d<8>(q);
-    print_sub_group_mapping_2d<16>(q);
-    print_sub_group_mapping_2d<32>(q);
+    print_sub_group_mapping_1d<64, 16>(q);
+    print_sub_group_mapping_1d<64, 32>(q);
+    print_sub_group_mapping_2d<8, 16>(q);
+    print_sub_group_mapping_2d<8, 32>(q);
 }
