@@ -43,19 +43,39 @@ void access_mem_subgroup_continuous(sycl::queue &q, T *device_prt, size_t size) 
         });
 }
 
+template<typename T>
+void acc_check(sycl::queue &q, T *device_prt, size_t size) {
+    // copy device mem to host
+    std::vector<T> host_vec(size);
+    q.memcpy(host_vec.data(), device_prt, size * sizeof(T)).wait();
+    T x0 = host_vec[0];
+
+    for (size_t i = 0; i < size; i++) {
+        T &x = host_vec[i];
+        if (x != x0) {
+            std::cerr << "ACC FAILED at host[" << i << "]=" << x << std::endl;
+            exit(1);
+        }
+    }
+}
+
 int main() {
     sycl::queue q{gpu_selector_by_cu};
 
-    using dtype = float;
+    using dtype = int32_t;
     size_t size = 100 * 1024 * 1024; // 100M elements
 
     auto *device_prt = sycl::malloc_device<dtype>(size, q);
 
+    q.fill(device_prt, dtype{0}, size).wait();
     benchmark_sycl_kernel(1000, q, [&](sycl::queue &q) {
         access_mem_workitem_continuous<dtype, 64, 32, 16>(q, device_prt, size);
     });
+    acc_check(q, device_prt, size);
 
+    q.fill(device_prt, dtype{0}, size).wait();
     benchmark_sycl_kernel(1000, q, [&](sycl::queue &q) {
         access_mem_subgroup_continuous<dtype, 64, 32, 16>(q, device_prt, size);
     });
+    acc_check(q, device_prt, size);
 }
