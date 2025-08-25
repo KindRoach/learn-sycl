@@ -50,18 +50,18 @@ void print_sub_groups(const sycl::device &d)
 
 inline int gpu_selector_by_cu(const sycl::device &dev)
 {
-    int priorty = 0;
+    int priority = 0;
 
     if (dev.is_gpu())
     {
         unsigned int cu = dev.get_info<sycl::info::device::max_compute_units>();
-        priorty += static_cast<int>(cu);
+        priority += static_cast<int>(cu);
     }
 
     if (dev.get_backend() == sycl::backend::ext_oneapi_level_zero)
     {
-        priorty += 1;
+        priority += 1;
     }
 
-    return priorty;
+    return priority;
 }
