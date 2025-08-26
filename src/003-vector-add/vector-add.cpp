@@ -5,112 +5,143 @@
 #include "util/device.hpp"
 #include "util/vector.hpp"
 
-using namespace sycl;
-
-size_t n_item = 1024 * 1024;
-size_t n_loop = 1000;
-
-void vector_add(const std::vector<float> &a, const std::vector<float> &b, std::vector<float> &c)
-{
-    for (int i = 0; i < n_item; ++i)
-    {
+void vector_add_ref(const std::vector<float> &a, const std::vector<float> &b, std::vector<float> &c) {
+    for (int i = 0; i < c.size(); ++i) {
         c[i] = a[i] + b[i];
     }
 }
 
-void vector_add(
-    queue &q,
-    buffer<float, 1> &a_buf,
-    buffer<float, 1> &b_buf,
-    buffer<float, 1> &c_buf)
-{
-    // Submit the kernel to the queue
-    q.submit(
-        [&](handler &h)
-        {
-            accessor A{a_buf, h, read_only};
-            accessor B{b_buf, h, read_only};
-            accessor C{c_buf, h, write_only};
+template<typename T>
+void vector_add_naive(sycl::queue &q, T *a, T *b, T *c, size_t size) {
+    q.parallel_for({size}, [=](sycl::id<1> idx) {
+        size_t offset = idx.get(0);
+        c[offset] = a[offset] + b[offset];
+    });
+}
 
-            // BEGIN CODE SNIP
-            h.parallel_for(range{n_item}, [=](id<1> idx)
-                           { C[idx] = A[idx] + B[idx]; });
-            // END CODE SNIP
+template<
+    typename T,
+    int16_t WG_SIZE,
+    int8_t SG_SIZE
+>
+void vector_add_nd_range(sycl::queue &q, T *a, T *b, T *c, size_t size) {
+    q.parallel_for(
+        sycl::nd_range<1>{size, WG_SIZE},
+        [=](sycl::nd_item<1> item) [[sycl::reqd_sub_group_size(SG_SIZE)]] {
+            size_t offset = item.get_global_linear_id();
+            c[offset] = a[offset] + b[offset];
         });
 }
 
-void test_performance()
-{
-    std::cout << "================= test_performance =================\n";
-
-    std::vector<float> a(n_item), b(n_item), c(n_item);
-
-    std::cout << "CPU single core: ";
-    benchmark_func(n_loop, [&]
-                   { vector_add(a, b, c); });
-
-    // wrap buffer lifecycle
-    {
-        queue q{cpu_selector_v};
-        buffer<float, 1> a_buf{a}, b_buf{b}, c_buf{c};
-        std::cout << "CPU SYCL: ";
-        benchmark_sycl_kernel(
-            n_loop, q, [&](queue &q)
-            { vector_add(q, a_buf, b_buf, c_buf); });
-    }
-
-    // wrap buffer lifecycle
-    {
-        queue q{gpu_selector_by_cu};
-        buffer<float, 1> a_buf{a}, b_buf{b}, c_buf{c};
-        std::cout << "GPU SYCL: ";
-        benchmark_sycl_kernel(
-            n_loop, q, [&](queue &q)
-            { vector_add(q, a_buf, b_buf, c_buf); });
-    }
+template<
+    typename T,
+    int16_t WG_SIZE,
+    int8_t SG_SIZE,
+    int8_t WI_SIZE
+>
+void vector_add_workitem_continue(sycl::queue &q, T *a, T *b, T *c, size_t size) {
+    q.parallel_for(
+        sycl::nd_range<1>{size / WI_SIZE, WG_SIZE},
+        [=](sycl::nd_item<1> item) [[sycl::reqd_sub_group_size(SG_SIZE)]] {
+            size_t offset = item.get_global_linear_id() * WI_SIZE;
+            for (size_t i = 0; i < WI_SIZE; i++) {
+                c[offset + i] = a[offset + i] + b[offset + i];
+            }
+        });
 }
 
-void test_acc()
-{
-    std::cout << "================= test_acc =================\n";
-
-    // Initialize input and output memory on the host
-    std::vector<float> a(n_item), b(n_item), c(n_item), c_ref(n_item);
-    random_fill(a, 0.0f, 1.0f);
-    random_fill(b, 0.0f, 1.0f);
-    vector_add(a, b, c_ref);
-
-    // wrap buffer lifecycle
-    {
-        queue q{cpu_selector_v};
-        buffer<float, 1> a_buf{a}, b_buf{b}, c_buf{c};
-        std::cout << "CPU SYCL: ";
-        vector_add(a, b, c);
-    }
-    acc_check(c, c_ref);
-
-    // wrap buffer lifecycle
-    {
-        queue q{gpu_selector_by_cu};
-        buffer<float, 1> a_buf{a}, b_buf{b}, c_buf{c};
-        std::cout << "GPU SYCL: ";
-        vector_add(a, b, c);
-    }
-    acc_check(c, c_ref);
+template<
+    typename T,
+    int16_t WG_SIZE,
+    int8_t SG_SIZE,
+    int8_t WI_SIZE
+>
+void vector_add_with_vec(sycl::queue &q, T *a, T *b, T *c, size_t size) {
+    q.parallel_for(
+        sycl::nd_range<1>{size / WI_SIZE, WG_SIZE},
+        [=](sycl::nd_item<1> item) [[sycl::reqd_sub_group_size(SG_SIZE)]] {
+            size_t offset = item.get_global_linear_id() * WI_SIZE;
+            sycl::vec<T, WI_SIZE> vec_a, vec_b;
+            vec_a.load(0, a + offset);
+            vec_b.load(0, b + offset);
+            vec_a += vec_b;
+            vec_a.store(0, c + offset);
+        });
 }
 
-int main(int argc, char *argv[])
-{
-    if (argc > 1)
-    {
-        n_item = std::stoul(argv[1]);
-    }
+template<
+    typename T,
+    int16_t WG_SIZE,
+    int8_t SG_SIZE,
+    int8_t WI_SIZE
+>
+void vector_add_subgroup_continue(sycl::queue &q, T *a, T *b, T *c, size_t size) {
+    q.parallel_for(
+        sycl::nd_range<1>{size / WI_SIZE, WG_SIZE},
+        [=](sycl::nd_item<1> item) [[sycl::reqd_sub_group_size(SG_SIZE)]] {
+            size_t wg_offset = item.get_group(0) * WG_SIZE * WI_SIZE;
+            size_t sg_offset = item.get_sub_group().get_group_id()[0] * SG_SIZE * WI_SIZE;
+            size_t wi_offset = item.get_sub_group().get_local_id()[0];
+            size_t offset = wg_offset + wi_offset + sg_offset;
+            for (size_t j = 0; j < WI_SIZE * SG_SIZE; j += WG_SIZE) {
+                c[offset + j] = a[offset + j] + b[offset + j];
+            }
+        });
+}
 
-    if (argc > 2)
-    {
-        n_loop = std::stoul(argv[2]);
-    }
+template<typename T>
+void acc_check(sycl::queue &q, std::vector<T> &gt, T *device_ptr, size_t size) {
+    std::vector<T> actual(size);
+    q.memcpy(actual.data(), device_ptr, size * sizeof(T)).wait();
+    acc_check(gt, actual);
+}
 
-    test_acc();
-    test_performance();
+int main(int argc, char *argv[]) {
+    using dtype = float;
+    size_t loop = 1000;
+    size_t size = 100 * 1024 * 1024; // 100M elements
+
+    std::vector<dtype> a(size), b(size), c(size);
+    random_fill(a);
+    random_fill(b);
+
+    std::cout << "vector_add_ref:\n";
+    benchmark_func(loop, [&] { vector_add_ref(a, b, c); });
+
+    sycl::queue q{gpu_selector_by_cu};
+    auto *p_a = sycl::malloc_device<dtype>(size, q);
+    auto *p_b = sycl::malloc_device<dtype>(size, q);
+    auto *p_c = sycl::malloc_device<dtype>(size, q);
+    q.memcpy(p_a, a.data(), size * sizeof(dtype)).wait();
+    q.memcpy(p_b, b.data(), size * sizeof(dtype)).wait();
+
+    std::cout << "vector_add_naive:\n";
+    benchmark_sycl_kernel(loop, q, [&](sycl::queue &q) {
+        vector_add_naive(q, p_a, p_b, p_c, size);
+    });
+    acc_check(q, c, p_c, size);
+
+    std::cout << "vector_add_nd_range:\n";
+    benchmark_sycl_kernel(loop, q, [&](sycl::queue &q) {
+        vector_add_nd_range<dtype, 64, 32>(q, p_a, p_b, p_c, size);
+    });
+    acc_check(q, c, p_c, size);
+
+    std::cout << "vector_add_workitem_continue:\n";
+    benchmark_sycl_kernel(loop, q, [&](sycl::queue &q) {
+        vector_add_workitem_continue<dtype, 64, 32, 4>(q, p_a, p_b, p_c, size);
+    });
+    acc_check(q, c, p_c, size);
+
+    std::cout << "vector_add_with_vec:\n";
+    benchmark_sycl_kernel(loop, q, [&](sycl::queue &q) {
+        vector_add_with_vec<dtype, 64, 32, 4>(q, p_a, p_b, p_c, size);
+    });
+    acc_check(q, c, p_c, size);
+
+    std::cout << "vector_add_subgroup_continue:\n";
+    benchmark_sycl_kernel(loop, q, [&](sycl::queue &q) {
+        vector_add_subgroup_continue<dtype, 64, 32, 4>(q, p_a, p_b, p_c, size);
+    });
+    acc_check(q, c, p_c, size);
 }
