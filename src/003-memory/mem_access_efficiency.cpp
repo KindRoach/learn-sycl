@@ -66,38 +66,39 @@ void access_mem_subgroup_continuous(sycl::queue &q, T *src, T *out, size_t size)
 }
 
 template<typename T>
-void acc_check(sycl::queue &q, std::vector<T> &gt, T *p2, size_t size) {
+void acc_check(sycl::queue &q, std::vector<T> &gt, T *device_ptr, size_t size) {
     std::vector<T> actual(size);
-    q.memcpy(actual.data(), p2, size * sizeof(T)).wait();
+    q.memcpy(actual.data(), device_ptr, size * sizeof(T)).wait();
     acc_check(gt, actual);
 }
 
 int main() {
-    sycl::queue q{gpu_selector_by_cu};
-
-    using dtype = int32_t;
+    using dtype = float;
+    size_t loop = 1000;
     size_t size = 100 * 1024 * 1024; // 100M elements
 
     std::vector<dtype> vec(size);
     random_fill(vec);
+
+    sycl::queue q{gpu_selector_by_cu};
     auto *p1 = sycl::malloc_device<dtype>(size, q);
     auto *p2 = sycl::malloc_device<dtype>(size, q);
-    q.memcpy(vec.data(), p1, size * sizeof(dtype)).wait();
+    q.memcpy(p1, vec.data(), size * sizeof(dtype)).wait();
 
     std::cout << "access_mem_workitem_continuous:" << std::endl;
-    benchmark_sycl_kernel(1000, q, [&](sycl::queue &q) {
+    benchmark_sycl_kernel(loop, q, [&](sycl::queue &q) {
         access_mem_workitem_continuous<dtype, 64, 32, 16>(q, p1, p2, size);
     });
     acc_check(q, vec, p2, size);
 
     std::cout << "access_mem_workitem_continuous_with_vec:" << std::endl;
-    benchmark_sycl_kernel(1000, q, [&](sycl::queue &q) {
+    benchmark_sycl_kernel(loop, q, [&](sycl::queue &q) {
         access_mem_workitem_continuous_with_vec<dtype, 64, 32, 16>(q, p1, p2, size);
     });
     acc_check(q, vec, p2, size);
 
     std::cout << "access_mem_subgroup_continuous:" << std::endl;
-    benchmark_sycl_kernel(1000, q, [&](sycl::queue &q) {
+    benchmark_sycl_kernel(loop, q, [&](sycl::queue &q) {
         access_mem_subgroup_continuous<dtype, 64, 32, 16>(q, p1, p2, size);
     });
     acc_check(q, vec, p2, size);

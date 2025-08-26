@@ -40,9 +40,9 @@ void acc_check(const std::vector<T> &v1, const std::vector<T> &v2) {
         T maxAbsDiff = 0;
         T maxRelDiff = 0;
         for (size_t i = 0; i < v1.size(); ++i) {
-            float absDiff = std::fabs(v1[i] - v2[i]);
-            float denominator = std::max(std::fabs(v1[i]), std::fabs(v2[i]));
-            float relDiff = (denominator > 0.0f) ? absDiff / denominator : 0.0f;
+            float absDiff = std::abs(v1[i] - v2[i]);
+            float denominator = std::max(std::abs(v1[i]), std::abs(v2[i]));
+            float relDiff = absDiff / denominator;
 
             maxAbsDiff = std::max(maxAbsDiff, absDiff);
             maxRelDiff = std::max(maxRelDiff, relDiff);
