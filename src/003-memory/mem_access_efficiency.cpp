@@ -87,19 +87,19 @@ int main() {
 
     std::cout << "access_mem_workitem_continuous:" << std::endl;
     benchmark_sycl_kernel(loop, q, [&](sycl::queue &q) {
-        access_mem_workitem_continuous<dtype, 64, 32, 16>(q, p1, p2, size);
+        access_mem_workitem_continuous<dtype, 64, 32, 4>(q, p1, p2, size);
     });
     acc_check(q, vec, p2, size);
 
     std::cout << "access_mem_workitem_continuous_with_vec:" << std::endl;
     benchmark_sycl_kernel(loop, q, [&](sycl::queue &q) {
-        access_mem_workitem_continuous_with_vec<dtype, 64, 32, 16>(q, p1, p2, size);
+        access_mem_workitem_continuous_with_vec<dtype, 64, 32, 4>(q, p1, p2, size);
     });
     acc_check(q, vec, p2, size);
 
     std::cout << "access_mem_subgroup_continuous:" << std::endl;
     benchmark_sycl_kernel(loop, q, [&](sycl::queue &q) {
-        access_mem_subgroup_continuous<dtype, 64, 32, 16>(q, p1, p2, size);
+        access_mem_subgroup_continuous<dtype, 64, 32, 4>(q, p1, p2, size);
     });
     acc_check(q, vec, p2, size);
 }
