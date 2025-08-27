@@ -115,33 +115,20 @@ int main(int argc, char *argv[]) {
     q.memcpy(p_a, a.data(), size * sizeof(dtype)).wait();
     q.memcpy(p_b, b.data(), size * sizeof(dtype)).wait();
 
-    std::cout << "vector_add_naive:\n";
-    benchmark_sycl_kernel(loop, q, [&](sycl::queue &q) {
-        vector_add_naive(q, p_a, p_b, p_c, size);
-    });
-    acc_check(q, c, p_c, size);
+    using vector_copy = std::function<void(sycl::queue &, dtype *, dtype *, dtype *, size_t)>;
+    std::vector<std::tuple<std::string, vector_copy> > funcs{
+        {"vector_add_naive", vector_add_naive<dtype>},
+        {"vector_add_nd_range", vector_add_nd_range<dtype, 256, 32>},
+        {"vector_add_workitem_continue", vector_add_workitem_continue<dtype, 256, 32, 4>},
+        {"vector_add_with_vec", vector_add_with_vec<dtype, 256, 32, 4>},
+        {"vector_add_subgroup_continue", vector_add_subgroup_continue<dtype, 256, 32, 4>},
+    };
 
-    std::cout << "vector_add_nd_range:\n";
-    benchmark_sycl_kernel(loop, q, [&](sycl::queue &q) {
-        vector_add_nd_range<dtype, 256, 32>(q, p_a, p_b, p_c, size);
-    });
-    acc_check(q, c, p_c, size);
-
-    std::cout << "vector_add_workitem_continue:\n";
-    benchmark_sycl_kernel(loop, q, [&](sycl::queue &q) {
-        vector_add_workitem_continue<dtype, 256, 32, 4>(q, p_a, p_b, p_c, size);
-    });
-    acc_check(q, c, p_c, size);
-
-    std::cout << "vector_add_with_vec:\n";
-    benchmark_sycl_kernel(loop, q, [&](sycl::queue &q) {
-        vector_add_with_vec<dtype, 256, 32, 4>(q, p_a, p_b, p_c, size);
-    });
-    acc_check(q, c, p_c, size);
-
-    std::cout << "vector_add_subgroup_continue:\n";
-    benchmark_sycl_kernel(loop, q, [&](sycl::queue &q) {
-        vector_add_subgroup_continue<dtype, 256, 32, 4>(q, p_a, p_b, p_c, size);
-    });
-    acc_check(q, c, p_c, size);
+    for (auto [func_name,func]: funcs) {
+        std::cout << func_name << ":\n";
+        benchmark_sycl_kernel(loop, q, [&](sycl::queue &q) {
+            func(q, p_a, p_b, p_c, size);
+        });
+        acc_check(q, c, p_c, size);
+    }
 }
