@@ -108,7 +108,7 @@ int main(int argc, char *argv[]) {
     std::cout << "vector_add_ref:\n";
     benchmark_func(loop, [&] { vector_add_ref(a, b, c); });
 
-    sycl::queue q{gpu_selector_by_cu};
+    sycl::queue q{gpu_selector_by_cu, sycl::property::queue::in_order()};
     auto *p_a = sycl::malloc_device<dtype>(size, q);
     auto *p_b = sycl::malloc_device<dtype>(size, q);
     auto *p_c = sycl::malloc_device<dtype>(size, q);
@@ -123,25 +123,25 @@ int main(int argc, char *argv[]) {
 
     std::cout << "vector_add_nd_range:\n";
     benchmark_sycl_kernel(loop, q, [&](sycl::queue &q) {
-        vector_add_nd_range<dtype, 64, 32>(q, p_a, p_b, p_c, size);
+        vector_add_nd_range<dtype, 256, 32>(q, p_a, p_b, p_c, size);
     });
     acc_check(q, c, p_c, size);
 
     std::cout << "vector_add_workitem_continue:\n";
     benchmark_sycl_kernel(loop, q, [&](sycl::queue &q) {
-        vector_add_workitem_continue<dtype, 64, 32, 4>(q, p_a, p_b, p_c, size);
+        vector_add_workitem_continue<dtype, 256, 32, 4>(q, p_a, p_b, p_c, size);
     });
     acc_check(q, c, p_c, size);
 
     std::cout << "vector_add_with_vec:\n";
     benchmark_sycl_kernel(loop, q, [&](sycl::queue &q) {
-        vector_add_with_vec<dtype, 64, 32, 4>(q, p_a, p_b, p_c, size);
+        vector_add_with_vec<dtype, 256, 32, 4>(q, p_a, p_b, p_c, size);
     });
     acc_check(q, c, p_c, size);
 
     std::cout << "vector_add_subgroup_continue:\n";
     benchmark_sycl_kernel(loop, q, [&](sycl::queue &q) {
-        vector_add_subgroup_continue<dtype, 64, 32, 4>(q, p_a, p_b, p_c, size);
+        vector_add_subgroup_continue<dtype, 256, 32, 4>(q, p_a, p_b, p_c, size);
     });
     acc_check(q, c, p_c, size);
 }
