@@ -87,13 +87,6 @@ void vector_copy_subgroup_continuous(sycl::queue &q, T *src, T *out, size_t size
         });
 }
 
-template<typename T>
-void acc_check(sycl::queue &q, std::vector<T> &gt, T *device_ptr, size_t size) {
-    std::vector<T> actual(size);
-    q.memcpy(actual.data(), device_ptr, size * sizeof(T)).wait();
-    acc_check(gt, actual);
-}
-
 int main() {
     using dtype = float;
     size_t loop = 1000;

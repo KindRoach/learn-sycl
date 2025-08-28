@@ -89,12 +89,6 @@ void vector_add_subgroup_continue(sycl::queue &q, T *a, T *b, T *c, size_t size)
         });
 }
 
-template<typename T>
-void acc_check(sycl::queue &q, std::vector<T> &gt, T *device_ptr, size_t size) {
-    std::vector<T> actual(size);
-    q.memcpy(actual.data(), device_ptr, size * sizeof(T)).wait();
-    acc_check(gt, actual);
-}
 
 int main(int argc, char *argv[]) {
     using dtype = float;

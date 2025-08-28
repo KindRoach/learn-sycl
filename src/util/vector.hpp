@@ -53,3 +53,10 @@ void acc_check(const std::vector<T> &v1, const std::vector<T> &v2) {
         throw std::runtime_error("Unsupported type for acc_check.");
     }
 }
+
+template<typename T>
+void acc_check(sycl::queue &q, std::vector<T> &gt, T *device_ptr, size_t size) {
+    std::vector<T> actual(size);
+    q.memcpy(actual.data(), device_ptr, size * sizeof(T)).wait();
+    acc_check(gt, actual);
+}
