@@ -81,7 +81,7 @@ void vector_copy_subgroup_continuous(sycl::queue &q, T *src, T *out, size_t size
             T *src_base = src + wg_offset + sg_offset + wi_offset;
             T *out_base = out + wg_offset + sg_offset + wi_offset;
 
-            for (size_t j = 0; j < WI_SIZE * SG_SIZE; j += WG_SIZE) {
+            for (size_t j = 0; j < WI_SIZE * SG_SIZE; j += SG_SIZE) {
                 out_base[j] = src_base[j];
             }
         });
@@ -110,13 +110,14 @@ int main() {
     using vector_copy = std::function<void(sycl::queue &, dtype *, dtype *, size_t)>;
     std::vector<std::tuple<std::string, vector_copy> > funcs{
         {"vector_copy_naive", vector_copy_naive<dtype>},
-        {"vector_add_nd_range", vector_copy_nd_range<dtype, 256, 32>},
+        {"vector_copy_nd_range", vector_copy_nd_range<dtype, 256, 32>},
         {"vector_copy_workitem_continuous", vector_copy_workitem_continuous<dtype, 256, 32, 4>},
         {"vector_copy_with_vec", vector_copy_with_vec<dtype, 256, 32, 4>},
         {"vector_copy_subgroup_continuous", vector_copy_subgroup_continuous<dtype, 256, 32, 4>},
     };
 
     for (auto [func_name,func]: funcs) {
+        q.fill(p2, 0, size * sizeof(dtype)).wait();
         std::cout << func_name << ":\n";
         benchmark_sycl_kernel(loop, q, [&](sycl::queue &q) {
             func(q, p1, p2, size);

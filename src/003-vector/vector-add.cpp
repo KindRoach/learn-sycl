@@ -83,7 +83,7 @@ void vector_add_subgroup_continue(sycl::queue &q, T *a, T *b, T *c, size_t size)
             size_t sg_offset = item.get_sub_group().get_group_id()[0] * SG_SIZE * WI_SIZE;
             size_t wi_offset = item.get_sub_group().get_local_id()[0];
             size_t offset = wg_offset + wi_offset + sg_offset;
-            for (size_t j = 0; j < WI_SIZE * SG_SIZE; j += WG_SIZE) {
+            for (size_t j = 0; j < WI_SIZE * SG_SIZE; j += SG_SIZE) {
                 c[offset + j] = a[offset + j] + b[offset + j];
             }
         });
@@ -125,6 +125,7 @@ int main(int argc, char *argv[]) {
     };
 
     for (auto [func_name,func]: funcs) {
+        q.fill(p_c, 0, size * sizeof(dtype)).wait();
         std::cout << func_name << ":\n";
         benchmark_sycl_kernel(loop, q, [&](sycl::queue &q) {
             func(q, p_a, p_b, p_c, size);
