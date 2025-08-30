@@ -14,7 +14,7 @@ void vector_sum_ref(const std::vector<T> &vec, std::vector<T> &out) {
 template<typename T>
 void vector_sum_atomic(sycl::queue &q, T *vec, T *out, size_t size) {
     q.single_task([=]() {
-        out[0] = 0;
+        out[0] = T{0};
     });
 
     q.parallel_for(size, [=](sycl::id<1> i) {
@@ -29,7 +29,7 @@ void vector_sum_atomic(sycl::queue &q, T *vec, T *out, size_t size) {
 template<typename T>
 void vector_sum_reduction(sycl::queue &q, T *vec, T *out, size_t size) {
     q.single_task([=]() {
-        out[0] = 0;
+        out[0] = T{0};
     });
 
     q.submit([&](sycl::handler &h) {
@@ -85,7 +85,7 @@ template<
 >
 void vector_sum_group_reduce_atomic_collect(sycl::queue &q, T *vec, T *out, size_t size) {
     q.single_task([=]() {
-        out[0] = 0;
+        out[0] = T{0};
     });
 
     q.parallel_for(
@@ -112,7 +112,7 @@ template<
 >
 void vector_sum_group_reduce_atomic_collect_vec(sycl::queue &q, T *vec, T *out, size_t size) {
     q.single_task([=]() {
-        out[0] = 0;
+        out[0] = T{0};
     });
 
     q.parallel_for(
@@ -147,7 +147,7 @@ template<
 >
 void vector_sum_group_reduce_atomic_collect_sg(sycl::queue &q, T *vec, T *out, size_t size) {
     q.single_task([=]() {
-        out[0] = 0;
+        out[0] = T{0};
     });
 
     q.parallel_for(
