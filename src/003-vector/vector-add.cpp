@@ -21,8 +21,8 @@ void vector_add_naive(sycl::queue &q, T *a, T *b, T *c, size_t size) {
 
 template<
     typename T,
-    int16_t WG_SIZE,
-    int8_t SG_SIZE
+    uint16_t WG_SIZE,
+    uint8_t SG_SIZE
 >
 void vector_add_nd_range(sycl::queue &q, T *a, T *b, T *c, size_t size) {
     q.parallel_for(
@@ -35,9 +35,9 @@ void vector_add_nd_range(sycl::queue &q, T *a, T *b, T *c, size_t size) {
 
 template<
     typename T,
-    int16_t WG_SIZE,
-    int8_t SG_SIZE,
-    int8_t WI_SIZE
+    uint16_t WG_SIZE,
+    uint8_t SG_SIZE,
+    uint8_t WI_SIZE
 >
 void vector_add_workitem_continue(sycl::queue &q, T *a, T *b, T *c, size_t size) {
     q.parallel_for(
@@ -52,9 +52,9 @@ void vector_add_workitem_continue(sycl::queue &q, T *a, T *b, T *c, size_t size)
 
 template<
     typename T,
-    int16_t WG_SIZE,
-    int8_t SG_SIZE,
-    int8_t WI_SIZE
+    uint16_t WG_SIZE,
+    uint8_t SG_SIZE,
+    uint8_t WI_SIZE
 >
 void vector_add_with_vec(sycl::queue &q, T *a, T *b, T *c, size_t size) {
     q.parallel_for(
@@ -71,9 +71,9 @@ void vector_add_with_vec(sycl::queue &q, T *a, T *b, T *c, size_t size) {
 
 template<
     typename T,
-    int16_t WG_SIZE,
-    int8_t SG_SIZE,
-    int8_t WI_SIZE
+    uint16_t WG_SIZE,
+    uint8_t SG_SIZE,
+    uint8_t WI_SIZE
 >
 void vector_add_subgroup_continue(sycl::queue &q, T *a, T *b, T *c, size_t size) {
     q.parallel_for(
@@ -109,8 +109,8 @@ int main(int argc, char *argv[]) {
     q.memcpy(p_a, a.data(), size * sizeof(dtype)).wait();
     q.memcpy(p_b, b.data(), size * sizeof(dtype)).wait();
 
-    using vector_copy = std::function<void(sycl::queue &, dtype *, dtype *, dtype *, size_t)>;
-    std::vector<std::tuple<std::string, vector_copy> > funcs{
+    using func_t = std::function<void(sycl::queue &, dtype *, dtype *, dtype *, size_t)>;
+    std::vector<std::tuple<std::string, func_t> > funcs{
         {"vector_add_naive", vector_add_naive<dtype>},
         {"vector_add_nd_range", vector_add_nd_range<dtype, 256, 32>},
         {"vector_add_workitem_continue", vector_add_workitem_continue<dtype, 256, 32, 4>},
@@ -119,8 +119,8 @@ int main(int argc, char *argv[]) {
     };
 
     for (auto [func_name,func]: funcs) {
+        std::cout << "\n" << func_name << ":\n";
         q.fill(p_c, 0, size).wait();
-        std::cout << func_name << ":\n";
         benchmark_sycl_kernel(loop, q, [&](sycl::queue &q) {
             func(q, p_a, p_b, p_c, size);
         });

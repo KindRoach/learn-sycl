@@ -14,8 +14,8 @@ void vector_copy_naive(sycl::queue &q, T *src, T *out, size_t size) {
 
 template<
     typename T,
-    int16_t WG_SIZE,
-    int8_t SG_SIZE
+    uint16_t WG_SIZE,
+    uint8_t SG_SIZE
 >
 void vector_copy_nd_range(sycl::queue &q, T *src, T *out, size_t size) {
     q.parallel_for(
@@ -28,9 +28,9 @@ void vector_copy_nd_range(sycl::queue &q, T *src, T *out, size_t size) {
 
 template<
     typename T,
-    size_t WG_SIZE,
-    size_t SG_SIZE,
-    size_t WI_SIZE
+    uint16_t WG_SIZE,
+    uint8_t SG_SIZE,
+    uint8_t WI_SIZE
 >
 void vector_copy_workitem_continuous(sycl::queue &q, T *src, T *out, size_t size) {
     q.parallel_for(
@@ -47,9 +47,9 @@ void vector_copy_workitem_continuous(sycl::queue &q, T *src, T *out, size_t size
 
 template<
     typename T,
-    size_t WG_SIZE,
-    size_t SG_SIZE,
-    size_t WI_SIZE
+    uint16_t WG_SIZE,
+    uint8_t SG_SIZE,
+    uint8_t WI_SIZE
 >
 void vector_copy_with_vec(sycl::queue &q, T *src, T *out, size_t size) {
     q.parallel_for(
@@ -66,9 +66,9 @@ void vector_copy_with_vec(sycl::queue &q, T *src, T *out, size_t size) {
 
 template<
     typename T,
-    size_t WG_SIZE,
-    size_t SG_SIZE,
-    size_t WI_SIZE
+    uint16_t WG_SIZE,
+    uint8_t SG_SIZE,
+    uint8_t WI_SIZE
 >
 void vector_copy_subgroup_continuous(sycl::queue &q, T *src, T *out, size_t size) {
     q.parallel_for(
@@ -100,8 +100,8 @@ int main() {
     auto *p2 = sycl::malloc_device<dtype>(size, q);
     q.memcpy(p1, vec.data(), size * sizeof(dtype)).wait();
 
-    using vector_copy = std::function<void(sycl::queue &, dtype *, dtype *, size_t)>;
-    std::vector<std::tuple<std::string, vector_copy> > funcs{
+    using func_t = std::function<void(sycl::queue &, dtype *, dtype *, size_t)>;
+    std::vector<std::tuple<std::string, func_t> > funcs{
         {"vector_copy_naive", vector_copy_naive<dtype>},
         {"vector_copy_nd_range", vector_copy_nd_range<dtype, 256, 32>},
         {"vector_copy_workitem_continuous", vector_copy_workitem_continuous<dtype, 256, 32, 4>},
@@ -110,8 +110,8 @@ int main() {
     };
 
     for (auto [func_name,func]: funcs) {
+        std::cout << "\n" << func_name << ":\n";
         q.fill(p2, 0, size).wait();
-        std::cout << func_name << ":\n";
         benchmark_sycl_kernel(loop, q, [&](sycl::queue &q) {
             func(q, p1, p2, size);
         });
