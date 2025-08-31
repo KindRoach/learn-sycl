@@ -94,6 +94,10 @@ void vector_sum_group_reduce_atomic_collect_vec(sycl::queue &q, T *a, T *b, T *o
 
 int main() {
     using dtype = float;
+    constexpr uint16_t wg_size = 256;
+    constexpr uint8_t sg_size = 32;
+    constexpr uint8_t wi_size = 4;
+
     size_t loop = 1000;
     size_t size = 100 * 1024 * 1024; // 100M elements
 
@@ -113,9 +117,18 @@ int main() {
 
     using func_t = std::function<void(sycl::queue &, dtype *, dtype *, dtype *, size_t)>;
     std::vector<std::tuple<std::string, func_t> > funcs{
-        {"vector_dot_reduction", vector_dot_reduction<dtype>},
-        {"vector_sum_group_reduce_atomic_collect", vector_sum_group_reduce_atomic_collect<dtype, 256, 32>},
-        {"vector_sum_group_reduce_atomic_collect_vec", vector_sum_group_reduce_atomic_collect_vec<dtype, 256, 32, 4>},
+        {
+            "vector_dot_reduction",
+            vector_dot_reduction<dtype>
+        },
+        {
+            "vector_sum_group_reduce_atomic_collect",
+            vector_sum_group_reduce_atomic_collect<dtype, wg_size, sg_size>
+        },
+        {
+            "vector_sum_group_reduce_atomic_collect_vec",
+            vector_sum_group_reduce_atomic_collect_vec<dtype, wg_size, sg_size, wi_size>
+        },
     };
 
     for (auto [func_name,func]: funcs) {

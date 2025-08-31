@@ -92,6 +92,10 @@ void vector_add_subgroup_continue(sycl::queue &q, T *a, T *b, T *c, size_t size)
 
 int main(int argc, char *argv[]) {
     using dtype = float;
+    constexpr uint16_t wg_size = 256;
+    constexpr uint8_t sg_size = 32;
+    constexpr uint8_t wi_size = 4;
+
     size_t loop = 1000;
     size_t size = 100 * 1024 * 1024; // 100M elements
 
@@ -112,10 +116,10 @@ int main(int argc, char *argv[]) {
     using func_t = std::function<void(sycl::queue &, dtype *, dtype *, dtype *, size_t)>;
     std::vector<std::tuple<std::string, func_t> > funcs{
         {"vector_add_naive", vector_add_naive<dtype>},
-        {"vector_add_nd_range", vector_add_nd_range<dtype, 256, 32>},
-        {"vector_add_workitem_continue", vector_add_workitem_continue<dtype, 256, 32, 4>},
-        {"vector_add_with_vec", vector_add_with_vec<dtype, 256, 32, 4>},
-        {"vector_add_subgroup_continue", vector_add_subgroup_continue<dtype, 256, 32, 4>},
+        {"vector_add_nd_range", vector_add_nd_range<dtype, wg_size, sg_size>},
+        {"vector_add_workitem_continue", vector_add_workitem_continue<dtype, wg_size, sg_size, wi_size>},
+        {"vector_add_with_vec", vector_add_with_vec<dtype, wg_size, sg_size, wi_size>},
+        {"vector_add_subgroup_continue", vector_add_subgroup_continue<dtype, wg_size, sg_size, wi_size>},
     };
 
     for (auto [func_name,func]: funcs) {
