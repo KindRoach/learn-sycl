@@ -141,6 +141,33 @@ void matrix_transpose_nd_range_tile_vec(sycl::queue &q, T *in, T *out, size_t m,
         });
 }
 
+template<
+    typename T,
+    uint16_t WG_SIZE,
+    uint8_t SG_SIZE
+>
+void matrix_transpose_nd_range_tile_slm(sycl::queue &q, T *in, T *out, size_t m, size_t n) {
+    q.submit([&](sycl::handler &h) {
+        sycl::local_accessor<T, 2> slm{{WG_SIZE, WG_SIZE}, h};
+        h.parallel_for(
+            sycl::nd_range<2>{{m, n}, {WG_SIZE, WG_SIZE}},
+            [=](sycl::nd_item<2> item) [[sycl::reqd_sub_group_size(SG_SIZE)]] {
+                size_t g_i = item.get_group(0) * WG_SIZE;
+                size_t g_j = item.get_group(1) * WG_SIZE;
+
+                size_t l_i = item.get_local_id(0);
+                size_t l_j = item.get_local_id(1);
+
+                T *base_in = in + g_i * n + g_j;
+                T *base_out = out + g_j * m + g_i;
+
+                slm[l_i][l_j] = base_in[l_i * n + l_j];
+                item.barrier();
+                base_out[l_i * m + l_j] = slm[l_j][l_i];
+            });
+    });
+}
+
 
 int main() {
     using dtype = float;
@@ -192,6 +219,10 @@ int main() {
         {
             "matrix_transpose_nd_range_tile_vec",
             matrix_transpose_nd_range_tile_vec<dtype, wg_size, sg_size, wi_size>
+        },
+        {
+            "matrix_transpose_nd_range_tile_slm",
+            matrix_transpose_nd_range_tile_slm<dtype, wg_size, sg_size>
         },
     };
 
