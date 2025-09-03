@@ -10,9 +10,13 @@ void random_fill(std::vector<T> &vec, T min_val = T{}, T max_val = T{100}) {
     std::mt19937 gen(rd());
 
     if constexpr (std::is_integral<T>::value) {
-        std::uniform_int_distribution<T> dist(min_val, max_val);
+        using dist_type = std::conditional_t<sizeof(T) < sizeof(int64_t), int64_t, T>;
+        std::uniform_int_distribution<dist_type> dist(
+            static_cast<dist_type>(min_val),
+            static_cast<dist_type>(max_val)
+        );
         for (auto &elem: vec) {
-            elem = dist(gen);
+            elem = static_cast<T>(dist(gen));
         }
     } else if constexpr (std::is_floating_point<T>::value) {
         std::uniform_real_distribution<T> dist(min_val, max_val);
