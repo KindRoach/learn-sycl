@@ -22,7 +22,7 @@ int main()
         auto max_work_group_size = q.get_device().get_info<sycl::info::device::max_work_group_size>();
         auto sub_group_sizes = q.get_device().get_info<sycl::info::device::sub_group_sizes>();
 
-        std::cout << "Intel GPU Characteristics:\n";
+        std::cout << "GPU Characteristics:\n";
         std::cout << "\tGPU Model : " << device_name << "\n";
         std::cout << "\tBackend: " << backend_to_string(device.get_backend()) << "\n";
         std::cout << "\tXeCore count : " << numSlices * numSubslicesPerSlice << "\n";
