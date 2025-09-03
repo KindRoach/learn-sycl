@@ -8,11 +8,11 @@ void print_sub_group_mapping_1d(sycl::queue &q) {
     std::cout << "=========================" << std::endl;
 
     using namespace sycl;
-    q.submit([&](auto &h) {
+    q.submit([](auto &h) {
         stream out(65536, 256, h);
         h.parallel_for(
             nd_range(range{WG_SIZE * 2}, range{WG_SIZE}),
-            [=](nd_item<1> it)[[sycl::reqd_sub_group_size(SG_SIZE)]] {
+            [out](nd_item<1> it)[[sycl::reqd_sub_group_size(SG_SIZE)]] {
                 size_t group_id_x = it.get_group(0);
                 size_t local_id_x = it.get_local_id(0);
                 size_t global_id = it.get_global_linear_id();
