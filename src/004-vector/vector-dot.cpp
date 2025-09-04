@@ -137,6 +137,6 @@ int main() {
         benchmark_sycl_kernel(loop, q, [&](sycl::queue &q) {
             func(q, p_a, p_b, p_out, size);
         });
-        acc_check(q, out, p_out, 1);
+        acc_check(q, out, p_out);
     }
 }
