@@ -1,3 +1,5 @@
+#pragma once
+
 #include <vector>
 #include <random>
 #include <stdexcept>
@@ -30,6 +32,10 @@ void random_fill(std::vector<T> &vec, T min_val = T{}, T max_val = T{100}) {
 
 template<typename T>
 void acc_check(const std::vector<T> &v1, const std::vector<T> &v2) {
+    if (v1.size() != v2.size()) {
+        throw std::runtime_error("Vectors must have the same size.");
+    }
+
     if constexpr (std::is_integral<T>::value) {
         bool passed = true;
         for (size_t i = 0; i < v1.size(); ++i) {
@@ -43,16 +49,30 @@ void acc_check(const std::vector<T> &v1, const std::vector<T> &v2) {
     } else if constexpr (std::is_floating_point<T>::value) {
         T maxAbsDiff = 0;
         T maxRelDiff = 0;
+        T sumAbsDiff = 0;
+        T sumRelDiff = 0;
+
         for (size_t i = 0; i < v1.size(); ++i) {
-            float absDiff = std::abs(v1[i] - v2[i]);
-            float denominator = std::max(std::abs(v1[i]), std::abs(v2[i]));
-            float relDiff = absDiff / denominator;
+            T absDiff = std::abs(v1[i] - v2[i]);
+            T denominator = std::max(std::abs(v1[i]), std::abs(v2[i]));
+            T relDiff = denominator != 0 ? absDiff / denominator : 0;
 
             maxAbsDiff = std::max(maxAbsDiff, absDiff);
             maxRelDiff = std::max(maxRelDiff, relDiff);
+
+            sumAbsDiff += absDiff;
+            sumRelDiff += relDiff;
         }
 
-        std::cout << "Float Acc Check: maxAbsError = " << maxAbsDiff << ", maxRelError = " << maxRelDiff << "\n";
+        T meanAbsError = sumAbsDiff / v1.size();
+        T meanRelError = sumRelDiff / v1.size();
+
+        std::cout << "Float Acc Check: "
+                << "maxAbsError = " << maxAbsDiff
+                << ", meanAbsError = " << meanAbsError
+                << ", maxRelError = " << maxRelDiff
+                << ", meanRelError = " << meanRelError
+                << "\n";
     } else {
         throw std::runtime_error("Unsupported type for acc_check.");
     }
