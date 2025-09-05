@@ -2,64 +2,55 @@
 
 #include <sycl/sycl.hpp>
 
-std::string backend_to_string(sycl::backend backend)
-{
-    switch (backend)
-    {
-    case sycl::backend::opencl:
-        return "OpenCL";
-    case sycl::backend::ext_oneapi_cuda:
-        return "CUDA";
-    case sycl::backend::ext_oneapi_level_zero:
-        return "Level-Zero";
-    default:
-        return "Unknown";
+std::string backend_to_string(sycl::backend backend) {
+    switch (backend) {
+        case sycl::backend::opencl:
+            return "OpenCL";
+        case sycl::backend::ext_oneapi_cuda:
+            return "CUDA";
+        case sycl::backend::ext_oneapi_level_zero:
+            return "Level-Zero";
+        default:
+            return "Unknown";
     }
 }
 
-std::string device_type_to_string(sycl::info::device_type type)
-{
-    switch (type)
-    {
-    case sycl::info::device_type::cpu:
-        return "CPU";
-    case sycl::info::device_type::gpu:
-        return "GPU";
-    case sycl::info::device_type::accelerator:
-        return "Accelerator";
-    case sycl::info::device_type::custom:
-        return "Custom";
-    case sycl::info::device_type::host:
-        return "Host";
-    case sycl::info::device_type::all:
-        return "All";
-    default:
-        return "Unknown";
+std::string device_type_to_string(sycl::info::device_type type) {
+    switch (type) {
+        case sycl::info::device_type::cpu:
+            return "CPU";
+        case sycl::info::device_type::gpu:
+            return "GPU";
+        case sycl::info::device_type::accelerator:
+            return "Accelerator";
+        case sycl::info::device_type::custom:
+            return "Custom";
+        case sycl::info::device_type::host:
+            return "Host";
+        case sycl::info::device_type::all:
+            return "All";
+        default:
+            return "Unknown";
     }
 }
 
-void print_sub_groups(const sycl::device &d)
-{
+void print_sub_groups(const sycl::device &d) {
     std::cout << "\tSubgroup sizes:";
-    for (const auto &x : d.get_info<sycl::info::device::sub_group_sizes>())
-    {
+    for (const auto &x: d.get_info<sycl::info::device::sub_group_sizes>()) {
         std::cout << " " << x;
     }
     std::cout << std::endl;
 }
 
-inline int gpu_selector_by_cu(const sycl::device &dev)
-{
+inline int gpu_selector_by_cu(const sycl::device &dev) {
     int priority = 0;
 
-    if (dev.is_gpu())
-    {
+    if (dev.is_gpu()) {
         unsigned int cu = dev.get_info<sycl::info::device::max_compute_units>();
         priority += static_cast<int>(cu);
     }
 
-    if (dev.get_backend() == sycl::backend::ext_oneapi_level_zero)
-    {
+    if (dev.get_backend() == sycl::backend::ext_oneapi_level_zero) {
         priority += 1;
     }
 
