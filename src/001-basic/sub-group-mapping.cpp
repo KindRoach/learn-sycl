@@ -9,7 +9,7 @@ void print_sub_group_mapping_1d(sycl::queue &q) {
 
     using namespace sycl;
     q.submit([](auto &h) {
-        stream out(65536, 256, h);
+        stream out(65536, 4096, h);
         h.parallel_for(
             nd_range(range{WG_SIZE * 2}, range{WG_SIZE}),
             [out](nd_item<1> it)[[sycl::reqd_sub_group_size(SG_SIZE)]] {
@@ -22,12 +22,12 @@ void print_sub_group_mapping_1d(sycl::queue &q) {
                 size_t sg_group_id = sg.get_group_id()[0];
                 size_t sg_id = sg.get_local_id()[0];
 
-                out << " group_id = " << setw(2) << group_id_x
-                        << " local_id = " << setw(2) << local_id_x
-                        << " global_id = " << setw(2) << global_id
-                        << " sg_group_id = " << setw(2) << sg_group_id
-                        << " sg_id = " << setw(2) << sg_id
-                        << " sg_size = " << setw(2) << sg_size
+                out << " group_id = " << setw(3) << group_id_x
+                        << " local_id = " << setw(3) << local_id_x
+                        << " global_id = " << setw(3) << global_id
+                        << " sg_group_id = " << setw(3) << sg_group_id
+                        << " sg_id = " << setw(3) << sg_id
+                        << " sg_size = " << setw(3) << sg_size
                         << endl;
             });
     }).wait();
@@ -39,7 +39,7 @@ void print_sub_group_mapping_2d(sycl::queue &q) {
 
     using namespace sycl;
     q.submit([&](auto &h) {
-        stream out(65536, 256, h);
+        stream out(65536, 4096, h);
         h.parallel_for(
             nd_range(range{WG_SIZE * 2, WG_SIZE * 2}, range{WG_SIZE, WG_SIZE}),
             [=](nd_item<2> it)[[sycl::reqd_sub_group_size(SG_SIZE)]] {
@@ -54,12 +54,12 @@ void print_sub_group_mapping_2d(sycl::queue &q) {
                 size_t sg_group_id = sg.get_group_id()[0];
                 size_t sg_id = sg.get_local_id()[0];
 
-                out << " group_id = (" << setw(2) << group_id_x << ", " << setw(2) << group_id_y << ")"
-                        << " local_id = (" << setw(2) << local_id_x << ", " << setw(2) << local_id_y << ")"
-                        << " global_id = " << setw(2) << global_id
-                        << " sg_group_id = " << setw(2) << sg_group_id
-                        << " sg_id = " << setw(2) << sg_id
-                        << " sg_size = " << setw(2) << sg_size
+                out << " group_id = (" << setw(3) << group_id_x << ", " << setw(3) << group_id_y << ")"
+                        << " local_id = (" << setw(3) << local_id_x << ", " << setw(3) << local_id_y << ")"
+                        << " global_id = " << setw(3) << global_id
+                        << " sg_group_id = " << setw(3) << sg_group_id
+                        << " sg_id = " << setw(3) << sg_id
+                        << " sg_size = " << setw(3) << sg_size
                         << endl;
             });
     }).wait();
