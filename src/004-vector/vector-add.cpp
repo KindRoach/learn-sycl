@@ -60,12 +60,12 @@ void vector_add_with_vec(sycl::queue &q, T *a, T *b, T *c, size_t size) {
     q.parallel_for(
         sycl::nd_range<1>{size / WI_SIZE, WG_SIZE},
         [=](sycl::nd_item<1> item) [[sycl::reqd_sub_group_size(SG_SIZE)]] {
-            size_t offset = item.get_global_linear_id() * WI_SIZE;
+            size_t offset = item.get_global_linear_id();
             sycl::vec<T, WI_SIZE> vec_a, vec_b;
-            vec_a.load(0, a + offset);
-            vec_b.load(0, b + offset);
+            vec_a.load(offset, a);
+            vec_b.load(offset, b);
             vec_a += vec_b;
-            vec_a.store(0, c + offset);
+            vec_a.store(offset, c);
         });
 }
 

@@ -56,11 +56,9 @@ void vector_copy_with_vec(sycl::queue &q, T *src, T *out, size_t size) {
         sycl::nd_range<1>{size / WI_SIZE, WG_SIZE},
         [=](sycl::nd_item<1> item) [[sycl::reqd_sub_group_size(SG_SIZE)]] {
             size_t i = item.get_global_linear_id();
-            T *src_base = src + i * WI_SIZE;
-            T *out_base = out + i * WI_SIZE;
             sycl::vec<T, WI_SIZE> vec;
-            vec.load(0, src_base);
-            vec.store(0, out_base);
+            vec.load(i, src);
+            vec.store(i, out);
         });
 }
 

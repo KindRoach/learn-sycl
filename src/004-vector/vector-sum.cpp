@@ -122,7 +122,8 @@ void vector_sum_group_reduce_atomic_collect_vec(sycl::queue &q, T *vec, T *out, 
             size_t i = item.get_global_linear_id();
 
             sycl::vec<T, WI_SIZE> vec_i;
-            vec_i.load(0, vec + i * WI_SIZE);
+            vec_i.load(i, vec);
+
             T sum_i = T{0};
             for (int j = 0; j < WI_SIZE; ++j) {
                 sum_i += vec_i[j];
