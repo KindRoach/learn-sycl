@@ -12,7 +12,7 @@ void print_sub_group_mapping_1d(sycl::queue &q) {
         stream out(65536, 4096, h);
         h.parallel_for(
             nd_range(range{WG_SIZE * 2}, range{WG_SIZE}),
-            [out](nd_item<1> it)[[sycl::reqd_sub_group_size(SG_SIZE)]] {
+            [out](nd_item<1> it) [[sycl::reqd_sub_group_size(SG_SIZE)]] {
                 size_t group_id_x = it.get_group(0);
                 size_t local_id_x = it.get_local_id(0);
                 size_t global_id = it.get_global_linear_id();
@@ -42,7 +42,7 @@ void print_sub_group_mapping_2d(sycl::queue &q) {
         stream out(65536, 4096, h);
         h.parallel_for(
             nd_range(range{WG_SIZE * 2, WG_SIZE * 2}, range{WG_SIZE, WG_SIZE}),
-            [=](nd_item<2> it)[[sycl::reqd_sub_group_size(SG_SIZE)]] {
+            [=](nd_item<2> it) [[sycl::reqd_sub_group_size(SG_SIZE)]] {
                 size_t group_id_x = it.get_group(0);
                 size_t group_id_y = it.get_group(1);
                 size_t local_id_x = it.get_local_id(0);

@@ -5,10 +5,15 @@
 #include "util/vector.hpp"
 
 // A : [m,k] in row-major
-// B : [k,n] in col-major
+// B : [k,n] in row-major or col-major
 // C = A x B : [m,n] in row-major
 
-template<typename T>
+enum layout {
+    row_major,
+    col_major
+};
+
+template<typename T, layout b_layout>
 void matrix_multiply_ref(
     const std::vector<T> &a,
     const std::vector<T> &b,
@@ -18,21 +23,29 @@ void matrix_multiply_ref(
         for (size_t j = 0; j < n; j++) {
             T sum = 0;
             for (size_t p = 0; p < k; p++) {
-                sum += a[i * k + p] * b[j * k + p];
+                if constexpr (b_layout == row_major) {
+                    sum += a[i * k + p] * b[p * n + j];
+                } else {
+                    sum += a[i * k + p] * b[j * k + p];
+                }
             }
             c[i * n + j] = sum;
         }
     }
 }
 
-template<typename T>
+template<typename T, layout b_layout>
 void matrix_multiply_naive(sycl::queue &q, T *a, T *b, T *c, size_t m, size_t n, size_t k) {
     q.parallel_for({m, n}, [=](sycl::id<2> idx) {
         T sum = 0;
         size_t i = idx[0];
         size_t j = idx[1];
         for (size_t p = 0; p < k; p++) {
-            sum += a[i * k + p] * b[j * k + p];
+            if constexpr (b_layout == row_major) {
+                sum += a[i * k + p] * b[p * n + j];
+            } else {
+                sum += a[i * k + p] * b[j * k + p];
+            }
         }
         c[i * n + j] = sum;
     });
@@ -40,17 +53,23 @@ void matrix_multiply_naive(sycl::queue &q, T *a, T *b, T *c, size_t m, size_t n,
 
 template<
     typename T,
-    uint16_t WG_SIZE
+    uint16_t WG_SIZE,
+    uint8_t SG_SIZE,
+    layout b_layout
 >
 void matrix_multiply_nd_range(sycl::queue &q, T *a, T *b, T *c, size_t m, size_t n, size_t k) {
     q.parallel_for(
         sycl::nd_range<2>{{m, n}, {WG_SIZE, WG_SIZE}},
-        [=](sycl::nd_item<2> item) {
+        [=](sycl::nd_item<2> item) [[sycl::reqd_sub_group_size(SG_SIZE)]] {
             T sum = 0;
             size_t i = item.get_global_id(0);
             size_t j = item.get_global_id(1);
             for (size_t p = 0; p < k; p++) {
-                sum += a[i * k + p] * b[j * k + p];
+                if constexpr (b_layout == row_major) {
+                    sum += a[i * k + p] * b[p * n + j];
+                } else {
+                    sum += a[i * k + p] * b[j * k + p];
+                }
             }
             c[i * n + j] = sum;
         });
@@ -59,64 +78,66 @@ void matrix_multiply_nd_range(sycl::queue &q, T *a, T *b, T *c, size_t m, size_t
 template<
     typename T,
     uint16_t WG_SIZE,
-    uint8_t WI_SIZE
+    uint8_t SG_SIZE,
+    uint8_t WI_K_SIZE,
+    layout b_layout
 >
 void matrix_multiply_nd_range_vec(sycl::queue &q, T *a, T *b, T *c, size_t m, size_t n, size_t k) {
     q.parallel_for(
         sycl::nd_range<2>{{m, n}, {WG_SIZE, WG_SIZE}},
-        [=](sycl::nd_item<2> item) {
+        [=](sycl::nd_item<2> item) [[sycl::reqd_sub_group_size(SG_SIZE)]] {
             size_t i = item.get_global_id(0);
             size_t j = item.get_global_id(1);
-            sycl::vec<T, WI_SIZE> vec_a, vec_b, vec_c{0};
-            for (size_t p = 0; p < k; p += WI_SIZE) {
+            sycl::vec<T, WI_K_SIZE> vec_a, vec_b, vec_c{0};
+            for (size_t p = 0; p < k; p += WI_K_SIZE) {
                 vec_a.load(0, a + i * k + p);
-                vec_b.load(0, b + j * k + p);
+                if constexpr (b_layout == row_major) {
+                    for (int vec_i = 0; vec_i < WI_K_SIZE; ++vec_i) {
+                        vec_b[vec_i] = b[(p + vec_i) * n + j];
+                    }
+                } else {
+                    vec_b.load(0, b + j * k + p);
+                }
                 vec_c += vec_a * vec_b;
             }
 
             T sum = 0;
-            for (int p = 0; p < WI_SIZE; ++p) {
-                sum += vec_c[p];
+            for (int vec_i = 0; vec_i < WI_K_SIZE; ++vec_i) {
+                sum += vec_c[vec_i];
             }
             c[i * n + j] = sum;
         });
 }
 
-
-int main() {
-    using dtype = float;
-    size_t loop = 1000;
-    size_t m = 1024, n = 1024, k = 1024; // 2G Flops
-
-    std::vector<dtype> a(m * k), b(k * n), c(m * n);
-    random_fill(a);
-    random_fill(b);
+template<typename T, layout b_layout>
+void test_matrix_multiply(
+    size_t loop, size_t m, size_t n, size_t k,
+    const std::vector<T> &a,
+    const std::vector<T> &b,
+    std::vector<T> &c,
+    sycl::queue &q,
+    T *d_a, T *d_b, T *d_c
+) {
+    std::cout << "-------------- b " << (b_layout == row_major ? "row major" : "col major") << " --------------\n";
 
     std::cout << "matrix_multiply_ref:\n";
     benchmark_func(10, [&]() {
-        matrix_multiply_ref(a, b, c, m, n, k);
+        matrix_multiply_ref<T, b_layout>(a, b, c, m, n, k);
     });
 
-    sycl::queue q{gpu_selector_by_cu, sycl::property::queue::in_order()};
-    auto *d_a = sycl::malloc_device<dtype>(a.size(), q);
-    auto *d_b = sycl::malloc_device<dtype>(b.size(), q);
-    auto *d_c = sycl::malloc_device<dtype>(c.size(), q);
-    q.memcpy(d_a, a.data(), a.size() * sizeof(dtype)).wait();
-    q.memcpy(d_b, b.data(), b.size() * sizeof(dtype)).wait();
-
-    using func_t = std::function<void(sycl::queue &, dtype *, dtype *, dtype *, size_t, size_t, size_t)>;
+    using func_t = std::function<void(sycl::queue &, T *, T *, T *, size_t, size_t, size_t)>;
     std::vector<std::tuple<std::string, func_t> > funcs{
         {
             "matrix_multiply_naive",
-            matrix_multiply_naive<dtype>
+            matrix_multiply_naive<T, b_layout>
         },
         {
             "matrix_multiply_nd_range",
-            matrix_multiply_nd_range<dtype, 32>
+            matrix_multiply_nd_range<T, 32, 32, b_layout>
         },
         {
             "matrix_multiply_nd_range_vec",
-            matrix_multiply_nd_range_vec<dtype, 32, 4>
+            matrix_multiply_nd_range_vec<T, 32, 32, 4, b_layout>
         }
     };
 
@@ -128,4 +149,24 @@ int main() {
         });
         acc_check(q, c, d_c);
     }
+}
+
+int main() {
+    using dtype = float;
+    size_t loop = 1000;
+    size_t m = 1024, n = 1024, k = 1024; // 2G FLOPs
+
+    std::vector<dtype> a(m * k), b(k * n), c(m * n);
+    random_fill(a);
+    random_fill(b);
+
+    sycl::queue q{gpu_selector_by_cu, sycl::property::queue::in_order()};
+    auto *d_a = sycl::malloc_device<dtype>(a.size(), q);
+    auto *d_b = sycl::malloc_device<dtype>(b.size(), q);
+    auto *d_c = sycl::malloc_device<dtype>(c.size(), q);
+    q.memcpy(d_a, a.data(), a.size() * sizeof(dtype)).wait();
+    q.memcpy(d_b, b.data(), b.size() * sizeof(dtype)).wait();
+
+    test_matrix_multiply<dtype, row_major>(loop, m, n, k, a, b, c, q, d_a, d_b, d_c);
+    test_matrix_multiply<dtype, col_major>(loop, m, n, k, a, b, c, q, d_a, d_b, d_c);
 }
