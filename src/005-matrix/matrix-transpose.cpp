@@ -78,11 +78,11 @@ void matrix_transpose_nd_range_read_continue_vec(sycl::queue &q, T *in, T *out, 
         sycl::nd_range<2>{{m, n / WI_SIZE}, {WG_SIZE, WG_SIZE}},
         [=](sycl::nd_item<2> item) [[sycl::reqd_sub_group_size(SG_SIZE)]] {
             size_t i = item.get_global_id(0);
-            size_t j = item.get_global_id(1);
+            size_t j = item.get_global_id(1) * WI_SIZE;
             sycl::vec<T, WI_SIZE> vec;
-            vec.load(0, in + i * n + j * WI_SIZE);
+            vec.load(0, in + i * n + j);
             for (size_t k = 0; k < WI_SIZE; ++k) {
-                out[(j * WI_SIZE + k) * m + i] = vec[k];
+                out[(j + k) * m + i] = vec[k];
             }
         });
 }
@@ -99,12 +99,12 @@ void matrix_transpose_nd_range_write_continue_vec(sycl::queue &q, T *in, T *out,
         sycl::nd_range<2>{{n, m / WI_SIZE}, {WG_SIZE, WG_SIZE}},
         [=](sycl::nd_item<2> item) [[sycl::reqd_sub_group_size(SG_SIZE)]] {
             size_t i = item.get_global_id(0);
-            size_t j = item.get_global_id(1);
+            size_t j = item.get_global_id(1) * WI_SIZE;
             sycl::vec<T, WI_SIZE> vec;
             for (size_t k = 0; k < WI_SIZE; ++k) {
-                vec[k] = in[(j * WI_SIZE + k) * n + i];
+                vec[k] = in[(j + k) * n + i];
             }
-            vec.store(0, out + i * m + j * WI_SIZE);
+            vec.store(0, out + i * m + j);
         });
 }
 
@@ -118,11 +118,11 @@ void matrix_transpose_nd_range_tile_vec(sycl::queue &q, T *in, T *out, size_t m,
     q.parallel_for(
         sycl::nd_range<2>{{m / WI_SIZE, n / WI_SIZE}, {WG_SIZE, WG_SIZE}},
         [=](sycl::nd_item<2> item) [[sycl::reqd_sub_group_size(SG_SIZE)]] {
-            size_t i = item.get_global_id(0);
-            size_t j = item.get_global_id(1);
+            size_t i = item.get_global_id(0) * WI_SIZE;
+            size_t j = item.get_global_id(1) * WI_SIZE;
 
-            T *base_in = in + i * WI_SIZE * n + j * WI_SIZE;
-            T *base_out = out + j * WI_SIZE * m + i * WI_SIZE;
+            T *base_in = in + i * n + j;
+            T *base_out = out + j * m + i;
 
             sycl::vec<T, WI_SIZE> vec[WI_SIZE];
             for (size_t k = 0; k < WI_SIZE; ++k) {
