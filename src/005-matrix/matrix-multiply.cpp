@@ -37,9 +37,10 @@ void matrix_multiply_ref(
 template<typename T, layout b_layout>
 void matrix_multiply_naive(sycl::queue &q, T *a, T *b, T *c, size_t m, size_t n, size_t k) {
     q.parallel_for({m, n}, [=](sycl::id<2> idx) {
+        size_t i = idx.get(0);
+        size_t j = idx.get(1);
+
         T sum = 0;
-        size_t i = idx[0];
-        size_t j = idx[1];
         for (size_t p = 0; p < k; p++) {
             if constexpr (b_layout == row_major) {
                 sum += a[i * k + p] * b[p * n + j];
@@ -47,6 +48,7 @@ void matrix_multiply_naive(sycl::queue &q, T *a, T *b, T *c, size_t m, size_t n,
                 sum += a[i * k + p] * b[j * k + p];
             }
         }
+
         c[i * n + j] = sum;
     });
 }
@@ -61,9 +63,10 @@ void matrix_multiply_nd_range(sycl::queue &q, T *a, T *b, T *c, size_t m, size_t
     q.parallel_for(
         sycl::nd_range<2>{{m, n}, {WG_SIZE, WG_SIZE}},
         [=](sycl::nd_item<2> item) [[sycl::reqd_sub_group_size(SG_SIZE)]] {
-            T sum = 0;
             size_t i = item.get_global_id(0);
             size_t j = item.get_global_id(1);
+
+            T sum = 0;
             for (size_t p = 0; p < k; p++) {
                 if constexpr (b_layout == row_major) {
                     sum += a[i * k + p] * b[p * n + j];
@@ -71,6 +74,7 @@ void matrix_multiply_nd_range(sycl::queue &q, T *a, T *b, T *c, size_t m, size_t
                     sum += a[i * k + p] * b[j * k + p];
                 }
             }
+
             c[i * n + j] = sum;
         });
 }
@@ -79,7 +83,7 @@ template<
     typename T,
     uint16_t WG_SIZE,
     uint8_t SG_SIZE,
-    uint8_t WI_K_SIZE,
+    uint8_t WI_SIZE,
     layout b_layout
 >
 void matrix_multiply_nd_range_vec(sycl::queue &q, T *a, T *b, T *c, size_t m, size_t n, size_t k) {
@@ -88,11 +92,11 @@ void matrix_multiply_nd_range_vec(sycl::queue &q, T *a, T *b, T *c, size_t m, si
         [=](sycl::nd_item<2> item) [[sycl::reqd_sub_group_size(SG_SIZE)]] {
             size_t i = item.get_global_id(0);
             size_t j = item.get_global_id(1);
-            sycl::vec<T, WI_K_SIZE> vec_a, vec_b, vec_c{0};
-            for (size_t p = 0; p < k; p += WI_K_SIZE) {
+            sycl::vec<T, WI_SIZE> vec_a, vec_b, vec_c{0};
+            for (size_t p = 0; p < k; p += WI_SIZE) {
                 vec_a.load(0, a + i * k + p);
                 if constexpr (b_layout == row_major) {
-                    for (int vec_i = 0; vec_i < WI_K_SIZE; ++vec_i) {
+                    for (int vec_i = 0; vec_i < WI_SIZE; ++vec_i) {
                         vec_b[vec_i] = b[(p + vec_i) * n + j];
                     }
                 } else {
@@ -102,11 +106,51 @@ void matrix_multiply_nd_range_vec(sycl::queue &q, T *a, T *b, T *c, size_t m, si
             }
 
             T sum = 0;
-            for (int vec_i = 0; vec_i < WI_K_SIZE; ++vec_i) {
+            for (int vec_i = 0; vec_i < WI_SIZE; ++vec_i) {
                 sum += vec_c[vec_i];
             }
             c[i * n + j] = sum;
         });
+}
+
+template<
+    typename T,
+    uint16_t WG_SIZE,
+    uint8_t SG_SIZE,
+    layout b_layout
+>
+void matrix_multiply_nd_range_slm(sycl::queue &q, T *a, T *b, T *c, size_t m, size_t n, size_t k) {
+    q.submit([=](sycl::handler &cgh) {
+        sycl::local_accessor<T, 2> slm_a{{WG_SIZE, WG_SIZE}, cgh};
+        sycl::local_accessor<T, 2> slm_b{{WG_SIZE, WG_SIZE}, cgh};
+        cgh.parallel_for(
+            sycl::nd_range<2>{{m, n}, {WG_SIZE, WG_SIZE}},
+            [=](sycl::nd_item<2> item) [[sycl::reqd_sub_group_size(SG_SIZE)]] {
+                size_t i = item.get_global_id(0);
+                size_t j = item.get_global_id(1);
+
+                size_t x = item.get_local_id(0);
+                size_t y = item.get_local_id(1);
+
+                T sum = 0;
+                for (size_t p = 0; p < k; p += WG_SIZE) {
+                    slm_a[x][y] = a[i * k + p + y];
+                    if constexpr (b_layout == row_major) {
+                        slm_b[x][y] = b[(p + x) * n + j];
+                    } else {
+                        slm_b[x][y] = b[j * k + p + x];
+                    }
+                    item.barrier();
+
+                    for (size_t tile_k = 0; tile_k < WG_SIZE; tile_k++) {
+                        sum += slm_a[x][tile_k] * slm_b[tile_k][y];
+                    }
+                    item.barrier();
+                }
+
+                c[i * n + j] = sum;
+            });
+    });
 }
 
 template<typename T, layout b_layout>
@@ -127,18 +171,10 @@ void test_matrix_multiply(
 
     using func_t = std::function<void(sycl::queue &, T *, T *, T *, size_t, size_t, size_t)>;
     std::vector<std::tuple<std::string, func_t> > funcs{
-        {
-            "matrix_multiply_naive",
-            matrix_multiply_naive<T, b_layout>
-        },
-        {
-            "matrix_multiply_nd_range",
-            matrix_multiply_nd_range<T, 32, 32, b_layout>
-        },
-        {
-            "matrix_multiply_nd_range_vec",
-            matrix_multiply_nd_range_vec<T, 32, 32, 4, b_layout>
-        }
+        {"matrix_multiply_naive", matrix_multiply_naive<T, b_layout>},
+        {"matrix_multiply_nd_range", matrix_multiply_nd_range<T, 32, 32, b_layout>},
+        {"matrix_multiply_nd_range_vec", matrix_multiply_nd_range_vec<T, 32, 32, 4, b_layout>},
+        {"matrix_multiply_nd_range_slm", matrix_multiply_nd_range_slm<T, 32, 32, b_layout>}
     };
 
     for (auto [func_name,func]: funcs) {
