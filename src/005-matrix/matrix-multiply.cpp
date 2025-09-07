@@ -1,4 +1,5 @@
 #include <sycl/sycl.hpp>
+#include <oneapi/mkl.hpp>
 
 #include "util/bench.hpp"
 #include "util/device.hpp"
@@ -31,6 +32,26 @@ void matrix_multiply_ref(
             }
             c[i * n + j] = sum;
         }
+    }
+}
+
+template<typename T, layout b_layout>
+void matrix_multiply_mkl(sycl::queue &q, T *a, T *b, T *c, size_t m, size_t n, size_t k) {
+    try {
+        // oneMKL gemm: submits to the provided SYCL queue and returns an event.
+        oneapi::mkl::blas::gemm(
+            q,
+            oneapi::mkl::transpose::nontrans,
+            b_layout == row_major ? oneapi::mkl::transpose::nontrans : oneapi::mkl::transpose::trans,
+            m, n, k,
+            1.0f,
+            a, k,
+            b, b_layout == row_major ? n : k,
+            0.0f,
+            c, n);
+    } catch (const std::exception &e) {
+        // rethrow or handle as desired; here we convert to runtime_error with message.
+        throw std::runtime_error(std::string("oneMKL gemm failed: ") + e.what());
     }
 }
 

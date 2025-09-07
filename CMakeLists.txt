@@ -6,6 +6,7 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 find_package(IntelSYCL REQUIRED)
+find_package(MKL REQUIRED)
 
 # Get a list of all .cpp files in the root directory
 set(src_root "${CMAKE_CURRENT_SOURCE_DIR}/src")
@@ -13,7 +14,7 @@ file(GLOB_RECURSE sources "${src_root}/*.cpp")
 
 # Create an executable target for each .cpp file
 # as the dir structure in src
-foreach(file_path ${sources})
+foreach (file_path ${sources})
 
     # Extract the target name and directory from the file path
     get_filename_component(target_name "${file_path}" NAME_WE)
@@ -24,6 +25,8 @@ foreach(file_path ${sources})
     target_include_directories("${target_name}" PRIVATE src)
     add_sycl_to_target(TARGET "${target_name}" SOURCES "${file_path}")
     set_target_properties("${target_name}" PROPERTIES
-        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/${target_dir}"
+            RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/${target_dir}"
     )
-endforeach()
+endforeach ()
+
+target_link_libraries(matrix-multiply PRIVATE MKL::MKL_DPCPP)
