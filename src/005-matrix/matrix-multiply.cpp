@@ -192,6 +192,7 @@ void test_matrix_multiply(
 
     using func_t = std::function<void(sycl::queue &, T *, T *, T *, size_t, size_t, size_t)>;
     std::vector<std::tuple<std::string, func_t> > funcs{
+        {"matrix_multiply_mkl", matrix_multiply_mkl<T, b_layout>},
         {"matrix_multiply_naive", matrix_multiply_naive<T, b_layout>},
         {"matrix_multiply_nd_range", matrix_multiply_nd_range<T, 32, 32, b_layout>},
         {"matrix_multiply_nd_range_vec", matrix_multiply_nd_range_vec<T, 32, 32, 4, b_layout>},
