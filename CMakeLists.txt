@@ -16,17 +16,22 @@ find_package(MKL REQUIRED)
 set(src_root "${CMAKE_CURRENT_SOURCE_DIR}/src")
 file(GLOB_RECURSE sources "${src_root}/*.cpp")
 
-# Allow the user to specify a device selector for SYCL compilation
+# Specify devices for SYCL AOT compilation
+# default to empty for disable AOT
 # Please refer to below link for available device name
 # https://www.intel.com/content/www/us/en/docs/dpcpp-cpp-compiler/developer-guide-reference/2025-2/ahead-of-time-compilation.html
-set(SYCL_DEVICE "bmg,mtl" CACHE STRING "SYCL device selector (default: bmg,mtl)")
 
 # Define Ahead-Of-Time (AOT) compilation flags for SYCL targeting Intel GPU
-set(SYCL_AOT_FLAGS
-        -fsycl-targets=spir64_gen
-        -Xsycl-target-backend=spir64_gen
-        "-device ${SYCL_DEVICE}"
-)
+set(SYCL_DEVICE "" CACHE STRING "Target device for SYCL AOT compilation (optional)")
+
+# set SYCL_AOT_FLAGS if SYCL_DEVICE provide
+if (SYCL_DEVICE)
+    set(SYCL_AOT_FLAGS
+            -fsycl-targets=spir64_gen
+            -Xsycl-target-backend
+            "-device ${SYCL_DEVICE}"
+    )
+endif ()
 
 # For each .cpp source file, create an individual executable
 # Preserves directory structure relative to src/
@@ -49,8 +54,10 @@ foreach (file_path ${sources})
     add_sycl_to_target(TARGET "${target_name}" SOURCES "${file_path}")
 
     # Apply SYCL AOT compilation and link flags
-    target_compile_options("${target_name}" PRIVATE "${SYCL_AOT_FLAGS}")
-    target_link_options("${target_name}" PRIVATE "${SYCL_AOT_FLAGS}")
+    if (SYCL_DEVICE)
+        target_compile_options("${target_name}" PRIVATE ${SYCL_AOT_FLAGS})
+        target_link_options("${target_name}" PRIVATE ${SYCL_AOT_FLAGS})
+    endif ()
 
     # Set output directory to bin/<relative path of src>
     set_target_properties("${target_name}" PROPERTIES
