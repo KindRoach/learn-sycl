@@ -235,7 +235,7 @@ int main() {
 
     for (auto [func_name,func, loop]: funcs) {
         std::cout << "\n" << func_name << ":\n";
-        q.fill(out_p, 0, 1).wait();
+        q.fill(out_p, dtype{0}, 1).wait();
         benchmark_sycl_kernel(loop, q, [&](sycl::queue &q) {
             func(q, vec_p, out_p, size);
         });

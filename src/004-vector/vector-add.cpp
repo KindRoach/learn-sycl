@@ -124,7 +124,7 @@ int main(int argc, char *argv[]) {
 
     for (auto [func_name,func]: funcs) {
         std::cout << "\n" << func_name << ":\n";
-        q.fill(p_c, 0, size).wait();
+        q.fill(p_c, dtype{0}, size).wait();
         benchmark_sycl_kernel(loop, q, [&](sycl::queue &q) {
             func(q, p_a, p_b, p_c, size);
         });

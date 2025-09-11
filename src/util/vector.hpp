@@ -6,56 +6,40 @@
 
 template<typename T>
 void random_fill(std::vector<T> &vec, T min_val = T{}, T max_val = T{100}) {
-    static_assert(std::is_arithmetic<T>::value, "random_fill only supports arithmetic types.");
-
     std::random_device rd;
     std::mt19937 gen(rd());
-
     if constexpr (std::is_integral<T>::value) {
-        using dist_type = std::conditional_t<sizeof(T) < sizeof(int64_t), int64_t, T>;
-        std::uniform_int_distribution<dist_type> dist(
-            static_cast<dist_type>(min_val),
-            static_cast<dist_type>(max_val)
-        );
-        for (auto &elem: vec) {
-            elem = static_cast<T>(dist(gen));
-        }
-    } else if constexpr (std::is_floating_point<T>::value) {
-        std::uniform_real_distribution<T> dist(min_val, max_val);
-        for (auto &elem: vec) {
-            elem = dist(gen);
-        }
-    } else {
-        throw std::runtime_error("Unsupported type for random fill.");
-    }
+        using dist_type = int64_t;
+        std::uniform_int_distribution<dist_type> dist(static_cast<dist_type>(min_val), static_cast<dist_type>(max_val));
+        for (auto &elem: vec) { elem = static_cast<T>(dist(gen)); }
+    } else if constexpr (std::is_floating_point<T>::value || std::is_same_v<T, sycl::half>) {
+        using dist_type = double;
+        std::uniform_real_distribution<dist_type>
+                dist(static_cast<dist_type>(min_val), static_cast<dist_type>(max_val));
+        for (auto &elem: vec) { elem = static_cast<T>(dist(gen)); }
+    } else { static_assert(0, "Unsupported type for random fill."); }
 }
 
 template<typename T>
 void acc_check(const std::vector<T> &v1, const std::vector<T> &v2) {
-    if (v1.size() != v2.size()) {
-        throw std::runtime_error("Vectors must have the same size.");
-    }
-
+    if (v1.size() != v2.size()) { throw std::runtime_error("Vectors must have the same size."); }
     if constexpr (std::is_integral<T>::value) {
-        bool passed = true;
-        for (size_t i = 0; i < v1.size(); ++i) {
-            if (v1[i] != v2[i]) {
-                passed = false;
-                break;
-            }
-        }
-
+        bool passed = std::equal(v1.begin(), v1.end(), v2.begin());
         std::cout << "Int Acc Check " << (passed ? "SUCCESS" : "FAILURE") << "\n";
-    } else if constexpr (std::is_floating_point<T>::value) {
-        T maxAbsDiff = 0;
-        T maxRelDiff = 0;
-        T sumAbsDiff = 0;
-        T sumRelDiff = 0;
+    } else if constexpr (std::is_floating_point<T>::value || std::is_same_v<T, sycl::half>) {
+        using acc_type = double;
+        acc_type maxAbsDiff = 0;
+        acc_type maxRelDiff = 0;
+        acc_type sumAbsDiff = 0;
+        acc_type sumRelDiff = 0;
 
         for (size_t i = 0; i < v1.size(); ++i) {
-            T absDiff = std::abs(v1[i] - v2[i]);
-            T denominator = std::max(std::abs(v1[i]), std::abs(v2[i]));
-            T relDiff = denominator != 0 ? absDiff / denominator : 0;
+            acc_type x1 = static_cast<acc_type>(v1[i]);
+            acc_type x2 = static_cast<acc_type>(v2[i]);
+
+            acc_type absDiff = std::abs(x1 - x2);
+            acc_type denominator = std::max(std::abs(x1), std::abs(x2));
+            acc_type relDiff = denominator != 0 ? absDiff / denominator : 0;
 
             maxAbsDiff = std::max(maxAbsDiff, absDiff);
             maxRelDiff = std::max(maxRelDiff, relDiff);
@@ -63,19 +47,11 @@ void acc_check(const std::vector<T> &v1, const std::vector<T> &v2) {
             sumAbsDiff += absDiff;
             sumRelDiff += relDiff;
         }
-
-        T meanAbsError = sumAbsDiff / v1.size();
-        T meanRelError = sumRelDiff / v1.size();
-
-        std::cout << "Float Acc Check: "
-                << "maxAbsError = " << maxAbsDiff
-                << ", meanAbsError = " << meanAbsError
-                << ", maxRelError = " << maxRelDiff
-                << ", meanRelError = " << meanRelError
-                << "\n";
-    } else {
-        throw std::runtime_error("Unsupported type for acc_check.");
-    }
+        acc_type meanAbsError = sumAbsDiff / v1.size();
+        acc_type meanRelError = sumRelDiff / v1.size();
+        std::cout << "Float Acc Check: " << "maxAbsError = " << maxAbsDiff << ", meanAbsError = " << meanAbsError <<
+                ", maxRelError = " << maxRelDiff << ", meanRelError = " << meanRelError << "\n";
+    } else { static_assert(0, "Unsupported type for acc check."); }
 }
 
 template<typename T>

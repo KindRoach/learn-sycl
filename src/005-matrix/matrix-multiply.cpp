@@ -201,7 +201,7 @@ void test_matrix_multiply(
 
     for (auto [func_name,func]: funcs) {
         std::cout << "\n" << func_name << ":\n";
-        q.fill(d_c, 0, c.size()).wait();
+        q.fill(d_c, T{0}, c.size()).wait();
         benchmark_sycl_kernel(loop, q, [&](sycl::queue &q) {
             func(q, d_a, d_b, d_c, m, n, k);
         });
