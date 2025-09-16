@@ -16,17 +16,16 @@ void matrix_multiply_ref(
     std::vector<T> &b,
     std::vector<T> &c,
     size_t m, size_t n, size_t k) {
-    Matrix2D<T> mat_a{a.data(), m, k};
-    Matrix2D<T> mat_b{b.data(), k, n};
-    Matrix2D<T> mat_c{c.data(), m, n};
+
+    size_t lda = k, ldb = n, ldc = n;
 
     for (size_t i = 0; i < m; i++) {
         for (size_t j = 0; j < n; j++) {
             T sum = 0;
             for (size_t p = 0; p < k; p++) {
-                sum += mat_a[i][p] * mat_b[p][j];
+                sum += mat(a.data(), lda, i, p) * mat(b.data(), ldb, p, j);
             }
-            mat_c[i][j] = sum;
+            mat(c.data(), ldc, i, j) = sum;
         }
     }
 }
@@ -53,30 +52,22 @@ void matrix_multiply_mkl(sycl::queue &q, T *a, T *b, T *c, size_t m, size_t n, s
 
 template<typename T>
 void matrix_multiply_naive(sycl::queue &q, T *a, T *b, T *c, size_t m, size_t n, size_t k) {
-    Matrix2D<T> mat_a{a, m, k};
-    Matrix2D<T> mat_b{b, k, n};
-    Matrix2D<T> mat_c{c, m, n};
+    size_t lda = k, ldb = n, ldc = n;
 
     q.parallel_for({m, n}, [=](sycl::id<2> idx) {
         size_t i = idx[0];
         size_t j = idx[1];
         T sum = 0;
         for (size_t p = 0; p < k; p++) {
-            sum += mat_a[i][p] * mat_b[p][j];
+            sum += mat(a, lda, i, p) * mat(b, ldb, p, j);
         }
-        mat_c[i][j] = sum;
+        mat(c, ldc, i, j) = sum;
     });
 }
 
-template<
-    typename T,
-    uint16_t WG_SIZE,
-    uint8_t SG_SIZE
->
+template<typename T, uint16_t WG_SIZE, uint8_t SG_SIZE>
 void matrix_multiply_nd_range(sycl::queue &q, T *a, T *b, T *c, size_t m, size_t n, size_t k) {
-    Matrix2D<T> mat_a{a, m, k};
-    Matrix2D<T> mat_b{b, k, n};
-    Matrix2D<T> mat_c{c, m, n};
+    size_t lda = k, ldb = n, ldc = n;
 
     q.parallel_for(
         sycl::nd_range<2>{{m, n}, {WG_SIZE, WG_SIZE}},
@@ -86,22 +77,15 @@ void matrix_multiply_nd_range(sycl::queue &q, T *a, T *b, T *c, size_t m, size_t
 
             T sum = 0;
             for (size_t p = 0; p < k; p++) {
-                sum += mat_a[i][p] * mat_b[p][j];
+                sum += mat(a, lda, i, p) * mat(b, ldb, p, j);
             }
-            mat_c[i][j] = sum;
+            mat(c, ldc, i, j) = sum;
         });
 }
 
-template<
-    typename T,
-    uint16_t WG_SIZE,
-    uint8_t SG_SIZE,
-    uint8_t WI_SIZE
->
+template<typename T, uint16_t WG_SIZE, uint8_t SG_SIZE, uint8_t WI_SIZE>
 void matrix_multiply_nd_range_vec(sycl::queue &q, T *a, T *b, T *c, size_t m, size_t n, size_t k) {
-    Matrix2D<T> mat_a{a, m, k};
-    Matrix2D<T> mat_b{b, k, n};
-    Matrix2D<T> mat_c{c, m, n};
+    size_t lda = k, ldb = n, ldc = n;
 
     q.parallel_for(
         sycl::nd_range<2>{{m, n}, {WG_SIZE, WG_SIZE}},
@@ -112,9 +96,9 @@ void matrix_multiply_nd_range_vec(sycl::queue &q, T *a, T *b, T *c, size_t m, si
             sycl::vec<T, WI_SIZE> vec_a, vec_b, vec_c{0};
 
             for (size_t p = 0; p < k; p += WI_SIZE) {
-                vec_a.load(0, &mat_a[i][p]);
+                vec_a.load(0, &mat(a, lda, i, p));
                 for (int v = 0; v < WI_SIZE; ++v) {
-                    vec_b[v] = mat_b[p + v][j];
+                    vec_b[v] = mat(b, ldb, p + v, j);
                 }
                 vec_c += vec_a * vec_b;
             }
@@ -123,19 +107,13 @@ void matrix_multiply_nd_range_vec(sycl::queue &q, T *a, T *b, T *c, size_t m, si
             for (int v = 0; v < WI_SIZE; ++v) {
                 sum += vec_c[v];
             }
-            mat_c[i][j] = sum;
+            mat(c, ldc, i, j) = sum;
         });
 }
 
-template<
-    typename T,
-    uint16_t WG_SIZE,
-    uint8_t SG_SIZE
->
+template<typename T, uint16_t WG_SIZE, uint8_t SG_SIZE>
 void matrix_multiply_nd_range_slm(sycl::queue &q, T *a, T *b, T *c, size_t m, size_t n, size_t k) {
-    Matrix2D<T> mat_a{a, m, k};
-    Matrix2D<T> mat_b{b, k, n};
-    Matrix2D<T> mat_c{c, m, n};
+    size_t lda = k, ldb = n, ldc = n;
 
     q.submit([&](sycl::handler &cgh) {
         sycl::local_accessor<T, 2> slm_a{{WG_SIZE, WG_SIZE}, cgh};
@@ -152,8 +130,8 @@ void matrix_multiply_nd_range_slm(sycl::queue &q, T *a, T *b, T *c, size_t m, si
 
                 T sum = 0;
                 for (size_t p = 0; p < k; p += WG_SIZE) {
-                    slm_a[x][y] = mat_a[i][p + y];
-                    slm_b[x][y] = mat_b[p + x][j];
+                    slm_a[x][y] = mat(a, lda, i, p + y);
+                    slm_b[x][y] = mat(b, ldb, p + x, j);
 
                     item.barrier();
 
@@ -162,7 +140,7 @@ void matrix_multiply_nd_range_slm(sycl::queue &q, T *a, T *b, T *c, size_t m, si
                     }
                     item.barrier();
                 }
-                mat_c[i][j] = sum;
+                mat(c, ldc, i, j) = sum;
             });
     });
 }

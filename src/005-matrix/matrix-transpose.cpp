@@ -11,91 +11,77 @@
 
 template<typename T>
 void matrix_transpose_ref(std::vector<T> &in, std::vector<T> &out, size_t m, size_t n) {
-    Matrix2D<T> mat_in{in.data(), m, n};
-    Matrix2D<T> mat_out{out.data(), n, m};
-
+    size_t ld_in = n, ld_out = m;
     for (size_t i = 0; i < m; ++i) {
         for (size_t j = 0; j < n; ++j) {
-            mat_out[j][i] = mat_in[i][j];
+            mat(out.data(), ld_out, j, i) = mat(in.data(), ld_in, i, j);
         }
     }
 }
 
 template<typename T>
 void matrix_transpose_naive_read_continue(sycl::queue &q, T *in, T *out, size_t m, size_t n) {
-    Matrix2D<T> mat_in{in, m, n};
-    Matrix2D<T> mat_out{out, n, m};
-
+    size_t ld_in = n, ld_out = m;
     q.parallel_for({m, n}, [=](sycl::id<2> idx) {
         size_t i = idx[0];
         size_t j = idx[1];
-        mat_out[j][i] = mat_in[i][j];
+        mat(out, ld_out, j, i) = mat(in, ld_in, i, j);
     });
 }
 
 template<typename T>
 void matrix_transpose_naive_write_continue(sycl::queue &q, T *in, T *out, size_t m, size_t n) {
-    Matrix2D<T> mat_in{in, m, n};
-    Matrix2D<T> mat_out{out, n, m};
-
+    size_t ld_in = n, ld_out = m;
     q.parallel_for({n, m}, [=](sycl::id<2> idx) {
         size_t i = idx[0];
         size_t j = idx[1];
-        mat_out[i][j] = mat_in[j][i];
+        mat(out, ld_out, i, j) = mat(in, ld_in, j, i);
     });
 }
 
 template<typename T, uint16_t WG_SIZE, uint8_t SG_SIZE>
 void matrix_transpose_nd_range_read_continue(sycl::queue &q, T *in, T *out, size_t m, size_t n) {
-    Matrix2D<T> mat_in{in, m, n};
-    Matrix2D<T> mat_out{out, n, m};
-
+    size_t ld_in = n, ld_out = m;
     q.parallel_for(
         sycl::nd_range<2>{{m, n}, {WG_SIZE, WG_SIZE}},
         [=](sycl::nd_item<2> item) [[sycl::reqd_sub_group_size(SG_SIZE)]] {
             size_t i = item.get_global_id(0);
             size_t j = item.get_global_id(1);
-            mat_out[j][i] = mat_in[i][j];
+            mat(out, ld_out, j, i) = mat(in, ld_in, i, j);
         });
 }
 
 template<typename T, uint16_t WG_SIZE, uint8_t SG_SIZE>
 void matrix_transpose_nd_range_write_continue(sycl::queue &q, T *in, T *out, size_t m, size_t n) {
-    Matrix2D<T> mat_in{in, m, n};
-    Matrix2D<T> mat_out{out, n, m};
-
+    size_t ld_in = n, ld_out = m;
     q.parallel_for(
         sycl::nd_range<2>{{n, m}, {WG_SIZE, WG_SIZE}},
         [=](sycl::nd_item<2> item) [[sycl::reqd_sub_group_size(SG_SIZE)]] {
             size_t i = item.get_global_id(0);
             size_t j = item.get_global_id(1);
-            mat_out[i][j] = mat_in[j][i];
+            mat(out, ld_out, i, j) = mat(in, ld_in, j, i);
         });
 }
 
 template<typename T, uint16_t WG_SIZE, uint8_t SG_SIZE, uint8_t WI_SIZE>
 void matrix_transpose_nd_range_read_continue_vec(sycl::queue &q, T *in, T *out, size_t m, size_t n) {
-    Matrix2D<T> mat_in{in, m, n};
-    Matrix2D<T> mat_out{out, n, m};
-
+    size_t ld_in = n, ld_out = m;
     q.parallel_for(
         sycl::nd_range<2>{{m, n / WI_SIZE}, {WG_SIZE, WG_SIZE}},
         [=](sycl::nd_item<2> item) [[sycl::reqd_sub_group_size(SG_SIZE)]] {
             size_t i = item.get_global_id(0);
             size_t j = item.get_global_id(1) * WI_SIZE;
             sycl::vec<T, WI_SIZE> vec;
-            vec.load(0, &mat_in[i][j]);
+            vec.load(0, &mat(in, ld_in, i, j));
             for (size_t k = 0; k < WI_SIZE; ++k) {
-                mat_out[j + k][i] = vec[k];
+                mat(out, ld_out, j + k, i) = vec[k];
             }
         });
 }
 
 template<typename T, uint16_t WG_SIZE, uint8_t SG_SIZE, uint8_t WI_SIZE>
 void matrix_transpose_nd_range_write_continue_vec(sycl::queue &q, T *in, T *out, size_t m, size_t n) {
-    Matrix2D<T> mat_in{in, m, n};
-    Matrix2D<T> mat_out{out, n, m};
-
+    size_t ld_in = n, ld_out = m;
     q.parallel_for(
         sycl::nd_range<2>{{n, m / WI_SIZE}, {WG_SIZE, WG_SIZE}},
         [=](sycl::nd_item<2> item) [[sycl::reqd_sub_group_size(SG_SIZE)]] {
@@ -103,17 +89,15 @@ void matrix_transpose_nd_range_write_continue_vec(sycl::queue &q, T *in, T *out,
             size_t j = item.get_global_id(1) * WI_SIZE;
             sycl::vec<T, WI_SIZE> vec;
             for (size_t k = 0; k < WI_SIZE; ++k) {
-                vec[k] = mat_in[j + k][i];
+                vec[k] = mat(in, ld_in, j + k, i);
             }
-            vec.store(0, &mat_out[i][j]);
+            vec.store(0, &mat(out, ld_out, i, j));
         });
 }
 
 template<typename T, uint16_t WG_SIZE, uint8_t SG_SIZE, uint8_t WI_SIZE>
 void matrix_transpose_nd_range_tile_vec(sycl::queue &q, T *in, T *out, size_t m, size_t n) {
-    Matrix2D<T> mat_in{in, m, n};
-    Matrix2D<T> mat_out{out, n, m};
-
+    size_t ld_in = n, ld_out = m;
     q.parallel_for(
         sycl::nd_range<2>{{m / WI_SIZE, n / WI_SIZE}, {WG_SIZE, WG_SIZE}},
         [=](sycl::nd_item<2> item) [[sycl::reqd_sub_group_size(SG_SIZE)]] {
@@ -122,7 +106,7 @@ void matrix_transpose_nd_range_tile_vec(sycl::queue &q, T *in, T *out, size_t m,
 
             sycl::vec<T, WI_SIZE> vec[WI_SIZE];
             for (size_t k = 0; k < WI_SIZE; ++k) {
-                vec[k].load(0, &mat_in[i + k][j]);
+                vec[k].load(0, &mat(in, ld_in, i + k, j));
             }
 
             // in-place transpose of WI_SIZE x WI_SIZE block
@@ -133,16 +117,14 @@ void matrix_transpose_nd_range_tile_vec(sycl::queue &q, T *in, T *out, size_t m,
             }
 
             for (size_t k = 0; k < WI_SIZE; ++k) {
-                vec[k].store(0, &mat_out[j + k][i]);
+                vec[k].store(0, &mat(out, ld_out, j + k, i));
             }
         });
 }
 
 template<typename T, uint16_t WG_SIZE, uint8_t SG_SIZE>
 void matrix_transpose_nd_range_tile_slm(sycl::queue &q, T *in, T *out, size_t m, size_t n) {
-    Matrix2D<T> mat_in{in, m, n};
-    Matrix2D<T> mat_out{out, n, m};
-
+    size_t ld_in = n, ld_out = m;
     q.submit([&](sycl::handler &h) {
         sycl::local_accessor<T, 2> slm{{WG_SIZE, WG_SIZE}, h};
         h.parallel_for(
@@ -154,9 +136,9 @@ void matrix_transpose_nd_range_tile_slm(sycl::queue &q, T *in, T *out, size_t m,
                 size_t l_i = item.get_local_id(0);
                 size_t l_j = item.get_local_id(1);
 
-                slm[l_i][l_j] = mat_in[i][j];
+                slm[l_i][l_j] = mat(in, ld_in, i, j);
                 item.barrier();
-                mat_out[j][i] = slm[l_i][l_j];
+                mat(out, ld_out, j, i) = slm[l_i][l_j];
             });
     });
 }
