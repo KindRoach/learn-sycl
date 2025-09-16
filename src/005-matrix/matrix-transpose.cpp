@@ -2,6 +2,7 @@
 
 #include "util/bench.hpp"
 #include "util/device.hpp"
+#include "util/memory.hpp"
 #include "util/vector.hpp"
 
 // In  : [m,n] in row-major
@@ -9,92 +10,92 @@
 
 
 template<typename T>
-void matrix_transpose_ref(const std::vector<T> &in, std::vector<T> &out, size_t m, size_t n) {
+void matrix_transpose_ref(std::vector<T> &in, std::vector<T> &out, size_t m, size_t n) {
+    Matrix2D<T> mat_in{in.data(), m, n};
+    Matrix2D<T> mat_out{out.data(), n, m};
+
     for (size_t i = 0; i < m; ++i) {
         for (size_t j = 0; j < n; ++j) {
-            out[j * m + i] = in[i * n + j];
+            mat_out[j][i] = mat_in[i][j];
         }
     }
 }
 
-
 template<typename T>
 void matrix_transpose_naive_read_continue(sycl::queue &q, T *in, T *out, size_t m, size_t n) {
+    Matrix2D<T> mat_in{in, m, n};
+    Matrix2D<T> mat_out{out, n, m};
+
     q.parallel_for({m, n}, [=](sycl::id<2> idx) {
         size_t i = idx[0];
         size_t j = idx[1];
-        out[j * m + i] = in[i * n + j];
+        mat_out[j][i] = mat_in[i][j];
     });
 }
 
 template<typename T>
 void matrix_transpose_naive_write_continue(sycl::queue &q, T *in, T *out, size_t m, size_t n) {
+    Matrix2D<T> mat_in{in, m, n};
+    Matrix2D<T> mat_out{out, n, m};
+
     q.parallel_for({n, m}, [=](sycl::id<2> idx) {
         size_t i = idx[0];
         size_t j = idx[1];
-        out[i * m + j] = in[j * n + i];
+        mat_out[i][j] = mat_in[j][i];
     });
 }
 
-
-template<
-    typename T,
-    uint16_t WG_SIZE,
-    uint8_t SG_SIZE
->
+template<typename T, uint16_t WG_SIZE, uint8_t SG_SIZE>
 void matrix_transpose_nd_range_read_continue(sycl::queue &q, T *in, T *out, size_t m, size_t n) {
+    Matrix2D<T> mat_in{in, m, n};
+    Matrix2D<T> mat_out{out, n, m};
+
     q.parallel_for(
         sycl::nd_range<2>{{m, n}, {WG_SIZE, WG_SIZE}},
         [=](sycl::nd_item<2> item) [[sycl::reqd_sub_group_size(SG_SIZE)]] {
             size_t i = item.get_global_id(0);
             size_t j = item.get_global_id(1);
-            out[j * m + i] = in[i * n + j];
+            mat_out[j][i] = mat_in[i][j];
         });
 }
 
-template<
-    typename T,
-    uint16_t WG_SIZE,
-    uint8_t SG_SIZE
->
+template<typename T, uint16_t WG_SIZE, uint8_t SG_SIZE>
 void matrix_transpose_nd_range_write_continue(sycl::queue &q, T *in, T *out, size_t m, size_t n) {
+    Matrix2D<T> mat_in{in, m, n};
+    Matrix2D<T> mat_out{out, n, m};
+
     q.parallel_for(
         sycl::nd_range<2>{{n, m}, {WG_SIZE, WG_SIZE}},
         [=](sycl::nd_item<2> item) [[sycl::reqd_sub_group_size(SG_SIZE)]] {
             size_t i = item.get_global_id(0);
             size_t j = item.get_global_id(1);
-            out[i * m + j] = in[j * n + i];
+            mat_out[i][j] = mat_in[j][i];
         });
 }
 
-template<
-    typename T,
-    uint16_t WG_SIZE,
-    uint8_t SG_SIZE,
-    uint8_t WI_SIZE
->
+template<typename T, uint16_t WG_SIZE, uint8_t SG_SIZE, uint8_t WI_SIZE>
 void matrix_transpose_nd_range_read_continue_vec(sycl::queue &q, T *in, T *out, size_t m, size_t n) {
+    Matrix2D<T> mat_in{in, m, n};
+    Matrix2D<T> mat_out{out, n, m};
+
     q.parallel_for(
         sycl::nd_range<2>{{m, n / WI_SIZE}, {WG_SIZE, WG_SIZE}},
         [=](sycl::nd_item<2> item) [[sycl::reqd_sub_group_size(SG_SIZE)]] {
             size_t i = item.get_global_id(0);
             size_t j = item.get_global_id(1) * WI_SIZE;
             sycl::vec<T, WI_SIZE> vec;
-            vec.load(0, in + i * n + j);
+            vec.load(0, &mat_in[i][j]);
             for (size_t k = 0; k < WI_SIZE; ++k) {
-                out[(j + k) * m + i] = vec[k];
+                mat_out[j + k][i] = vec[k];
             }
         });
 }
 
-
-template<
-    typename T,
-    uint16_t WG_SIZE,
-    uint8_t SG_SIZE,
-    uint8_t WI_SIZE
->
+template<typename T, uint16_t WG_SIZE, uint8_t SG_SIZE, uint8_t WI_SIZE>
 void matrix_transpose_nd_range_write_continue_vec(sycl::queue &q, T *in, T *out, size_t m, size_t n) {
+    Matrix2D<T> mat_in{in, m, n};
+    Matrix2D<T> mat_out{out, n, m};
+
     q.parallel_for(
         sycl::nd_range<2>{{n, m / WI_SIZE}, {WG_SIZE, WG_SIZE}},
         [=](sycl::nd_item<2> item) [[sycl::reqd_sub_group_size(SG_SIZE)]] {
@@ -102,33 +103,29 @@ void matrix_transpose_nd_range_write_continue_vec(sycl::queue &q, T *in, T *out,
             size_t j = item.get_global_id(1) * WI_SIZE;
             sycl::vec<T, WI_SIZE> vec;
             for (size_t k = 0; k < WI_SIZE; ++k) {
-                vec[k] = in[(j + k) * n + i];
+                vec[k] = mat_in[j + k][i];
             }
-            vec.store(0, out + i * m + j);
+            vec.store(0, &mat_out[i][j]);
         });
 }
 
-template<
-    typename T,
-    uint16_t WG_SIZE,
-    uint8_t SG_SIZE,
-    uint8_t WI_SIZE
->
+template<typename T, uint16_t WG_SIZE, uint8_t SG_SIZE, uint8_t WI_SIZE>
 void matrix_transpose_nd_range_tile_vec(sycl::queue &q, T *in, T *out, size_t m, size_t n) {
+    Matrix2D<T> mat_in{in, m, n};
+    Matrix2D<T> mat_out{out, n, m};
+
     q.parallel_for(
         sycl::nd_range<2>{{m / WI_SIZE, n / WI_SIZE}, {WG_SIZE, WG_SIZE}},
         [=](sycl::nd_item<2> item) [[sycl::reqd_sub_group_size(SG_SIZE)]] {
             size_t i = item.get_global_id(0) * WI_SIZE;
             size_t j = item.get_global_id(1) * WI_SIZE;
 
-            T *base_in = in + i * n + j;
-            T *base_out = out + j * m + i;
-
             sycl::vec<T, WI_SIZE> vec[WI_SIZE];
             for (size_t k = 0; k < WI_SIZE; ++k) {
-                vec[k].load(0, base_in + k * n);
+                vec[k].load(0, &mat_in[i + k][j]);
             }
 
+            // in-place transpose of WI_SIZE x WI_SIZE block
             for (size_t k_i = 0; k_i < WI_SIZE; ++k_i) {
                 for (size_t k_j = k_i + 1; k_j < WI_SIZE; ++k_j) {
                     std::swap(vec[k_i][k_j], vec[k_j][k_i]);
@@ -136,34 +133,30 @@ void matrix_transpose_nd_range_tile_vec(sycl::queue &q, T *in, T *out, size_t m,
             }
 
             for (size_t k = 0; k < WI_SIZE; ++k) {
-                vec[k].store(0, base_out + k * m);
+                vec[k].store(0, &mat_out[j + k][i]);
             }
         });
 }
 
-template<
-    typename T,
-    uint16_t WG_SIZE,
-    uint8_t SG_SIZE
->
+template<typename T, uint16_t WG_SIZE, uint8_t SG_SIZE>
 void matrix_transpose_nd_range_tile_slm(sycl::queue &q, T *in, T *out, size_t m, size_t n) {
+    Matrix2D<T> mat_in{in, m, n};
+    Matrix2D<T> mat_out{out, n, m};
+
     q.submit([&](sycl::handler &h) {
         sycl::local_accessor<T, 2> slm{{WG_SIZE, WG_SIZE}, h};
         h.parallel_for(
             sycl::nd_range<2>{{m, n}, {WG_SIZE, WG_SIZE}},
             [=](sycl::nd_item<2> item) [[sycl::reqd_sub_group_size(SG_SIZE)]] {
-                size_t g_i = item.get_group(0) * WG_SIZE;
-                size_t g_j = item.get_group(1) * WG_SIZE;
+                size_t i = item.get_global_id(0);
+                size_t j = item.get_global_id(1);
 
                 size_t l_i = item.get_local_id(0);
                 size_t l_j = item.get_local_id(1);
 
-                T *base_in = in + g_i * n + g_j;
-                T *base_out = out + g_j * m + g_i;
-
-                slm[l_i][l_j] = base_in[l_i * n + l_j];
+                slm[l_i][l_j] = mat_in[i][j];
                 item.barrier();
-                base_out[l_i * m + l_j] = slm[l_j][l_i];
+                mat_out[j][i] = slm[l_i][l_j];
             });
     });
 }

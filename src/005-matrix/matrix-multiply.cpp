@@ -3,6 +3,7 @@
 
 #include "util/bench.hpp"
 #include "util/device.hpp"
+#include "util/memory.hpp"
 #include "util/vector.hpp"
 
 // A : [m,k] in row-major
@@ -16,21 +17,25 @@ enum layout {
 
 template<typename T, layout b_layout>
 void matrix_multiply_ref(
-    const std::vector<T> &a,
-    const std::vector<T> &b,
+    std::vector<T> &a,
+    std::vector<T> &b,
     std::vector<T> &c,
     size_t m, size_t n, size_t k) {
+    Matrix2D<T> mat_a{a.data(), m, k};
+    Matrix2D<T> mat_b{b.data(), (b_layout == row_major ? k : n), (b_layout == row_major ? n : k)};
+    Matrix2D<T> mat_c{c.data(), m, n};
+
     for (size_t i = 0; i < m; i++) {
         for (size_t j = 0; j < n; j++) {
             T sum = 0;
             for (size_t p = 0; p < k; p++) {
                 if constexpr (b_layout == row_major) {
-                    sum += a[i * k + p] * b[p * n + j];
+                    sum += mat_a[i][p] * mat_b[p][j];
                 } else {
-                    sum += a[i * k + p] * b[j * k + p];
+                    sum += mat_a[i][p] * mat_b[j][p];
                 }
             }
-            c[i * n + j] = sum;
+            mat_c[i][j] = sum;
         }
     }
 }
@@ -57,20 +62,22 @@ void matrix_multiply_mkl(sycl::queue &q, T *a, T *b, T *c, size_t m, size_t n, s
 
 template<typename T, layout b_layout>
 void matrix_multiply_naive(sycl::queue &q, T *a, T *b, T *c, size_t m, size_t n, size_t k) {
-    q.parallel_for({m, n}, [=](sycl::id<2> idx) {
-        size_t i = idx.get(0);
-        size_t j = idx.get(1);
+    Matrix2D<T> mat_a{a, m, k};
+    Matrix2D<T> mat_b{b, (b_layout == row_major ? k : n), (b_layout == row_major ? n : k)};
+    Matrix2D<T> mat_c{c, m, n};
 
+    q.parallel_for({m, n}, [=](sycl::id<2> idx) {
+        size_t i = idx[0];
+        size_t j = idx[1];
         T sum = 0;
         for (size_t p = 0; p < k; p++) {
             if constexpr (b_layout == row_major) {
-                sum += a[i * k + p] * b[p * n + j];
+                sum += mat_a[i][p] * mat_b[p][j];
             } else {
-                sum += a[i * k + p] * b[j * k + p];
+                sum += mat_a[i][p] * mat_b[j][p];
             }
         }
-
-        c[i * n + j] = sum;
+        mat_c[i][j] = sum;
     });
 }
 
@@ -81,6 +88,10 @@ template<
     layout b_layout
 >
 void matrix_multiply_nd_range(sycl::queue &q, T *a, T *b, T *c, size_t m, size_t n, size_t k) {
+    Matrix2D<T> mat_a{a, m, k};
+    Matrix2D<T> mat_b{b, (b_layout == row_major ? k : n), (b_layout == row_major ? n : k)};
+    Matrix2D<T> mat_c{c, m, n};
+
     q.parallel_for(
         sycl::nd_range<2>{{m, n}, {WG_SIZE, WG_SIZE}},
         [=](sycl::nd_item<2> item) [[sycl::reqd_sub_group_size(SG_SIZE)]] {
@@ -90,13 +101,12 @@ void matrix_multiply_nd_range(sycl::queue &q, T *a, T *b, T *c, size_t m, size_t
             T sum = 0;
             for (size_t p = 0; p < k; p++) {
                 if constexpr (b_layout == row_major) {
-                    sum += a[i * k + p] * b[p * n + j];
+                    sum += mat_a[i][p] * mat_b[p][j];
                 } else {
-                    sum += a[i * k + p] * b[j * k + p];
+                    sum += mat_a[i][p] * mat_b[j][p];
                 }
             }
-
-            c[i * n + j] = sum;
+            mat_c[i][j] = sum;
         });
 }
 
@@ -108,29 +118,35 @@ template<
     layout b_layout
 >
 void matrix_multiply_nd_range_vec(sycl::queue &q, T *a, T *b, T *c, size_t m, size_t n, size_t k) {
+    Matrix2D<T> mat_a{a, m, k};
+    Matrix2D<T> mat_b{b, (b_layout == row_major ? k : n), (b_layout == row_major ? n : k)};
+    Matrix2D<T> mat_c{c, m, n};
+
     q.parallel_for(
         sycl::nd_range<2>{{m, n}, {WG_SIZE, WG_SIZE}},
         [=](sycl::nd_item<2> item) [[sycl::reqd_sub_group_size(SG_SIZE)]] {
             size_t i = item.get_global_id(0);
             size_t j = item.get_global_id(1);
+
             sycl::vec<T, WI_SIZE> vec_a, vec_b, vec_c{0};
+
             for (size_t p = 0; p < k; p += WI_SIZE) {
-                vec_a.load(0, a + i * k + p);
+                vec_a.load(0, &mat_a[i][p]);
                 if constexpr (b_layout == row_major) {
-                    for (int vec_i = 0; vec_i < WI_SIZE; ++vec_i) {
-                        vec_b[vec_i] = b[(p + vec_i) * n + j];
+                    for (int v = 0; v < WI_SIZE; ++v) {
+                        vec_b[v] = mat_b[p + v][j];
                     }
                 } else {
-                    vec_b.load(0, b + j * k + p);
+                    vec_b.load(0, &mat_b[j][p]);
                 }
                 vec_c += vec_a * vec_b;
             }
 
             T sum = 0;
-            for (int vec_i = 0; vec_i < WI_SIZE; ++vec_i) {
-                sum += vec_c[vec_i];
+            for (int v = 0; v < WI_SIZE; ++v) {
+                sum += vec_c[v];
             }
-            c[i * n + j] = sum;
+            mat_c[i][j] = sum;
         });
 }
 
@@ -141,9 +157,14 @@ template<
     layout b_layout
 >
 void matrix_multiply_nd_range_slm(sycl::queue &q, T *a, T *b, T *c, size_t m, size_t n, size_t k) {
-    q.submit([=](sycl::handler &cgh) {
+    Matrix2D<T> mat_a{a, m, k};
+    Matrix2D<T> mat_b{b, (b_layout == row_major ? k : n), (b_layout == row_major ? n : k)};
+    Matrix2D<T> mat_c{c, m, n};
+
+    q.submit([&](sycl::handler &cgh) {
         sycl::local_accessor<T, 2> slm_a{{WG_SIZE, WG_SIZE}, cgh};
         sycl::local_accessor<T, 2> slm_b{{WG_SIZE, WG_SIZE}, cgh};
+
         cgh.parallel_for(
             sycl::nd_range<2>{{m, n}, {WG_SIZE, WG_SIZE}},
             [=](sycl::nd_item<2> item) [[sycl::reqd_sub_group_size(SG_SIZE)]] {
@@ -155,11 +176,11 @@ void matrix_multiply_nd_range_slm(sycl::queue &q, T *a, T *b, T *c, size_t m, si
 
                 T sum = 0;
                 for (size_t p = 0; p < k; p += WG_SIZE) {
-                    slm_a[x][y] = a[i * k + p + y];
+                    slm_a[x][y] = mat_a[i][p + y];
                     if constexpr (b_layout == row_major) {
-                        slm_b[x][y] = b[(p + x) * n + j];
+                        slm_b[x][y] = mat_b[p + x][j];
                     } else {
-                        slm_b[x][y] = b[j * k + p + x];
+                        slm_b[x][y] = mat_b[j][p + x];
                     }
                     item.barrier();
 
@@ -168,8 +189,7 @@ void matrix_multiply_nd_range_slm(sycl::queue &q, T *a, T *b, T *c, size_t m, si
                     }
                     item.barrier();
                 }
-
-                c[i * n + j] = sum;
+                mat_c[i][j] = sum;
             });
     });
 }
@@ -177,8 +197,8 @@ void matrix_multiply_nd_range_slm(sycl::queue &q, T *a, T *b, T *c, size_t m, si
 template<typename T, layout b_layout>
 void test_matrix_multiply(
     size_t loop, size_t m, size_t n, size_t k,
-    const std::vector<T> &a,
-    const std::vector<T> &b,
+    std::vector<T> &a,
+    std::vector<T> &b,
     std::vector<T> &c,
     sycl::queue &q,
     T *d_a, T *d_b, T *d_c
@@ -186,7 +206,7 @@ void test_matrix_multiply(
     std::cout << "-------------- b " << (b_layout == row_major ? "row major" : "col major") << " --------------\n";
 
     std::cout << "matrix_multiply_ref:\n";
-    benchmark_func(10, [&]() {
+    benchmark_func(1, [&]() {
         matrix_multiply_ref<T, b_layout>(a, b, c, m, n, k);
     });
 
