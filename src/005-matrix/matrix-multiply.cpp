@@ -162,7 +162,7 @@ int main() {
     q.memcpy(d_b, b.data(), b.size() * sizeof(dtype)).wait();
 
     std::cout << "matrix_multiply_ref:\n";
-    benchmark_func(1, [&]() {
+    benchmark_func(10, [&]() {
         matrix_multiply_ref<dtype>(a, b, c, m, n, k);
     });
 
