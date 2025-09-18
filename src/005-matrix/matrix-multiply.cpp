@@ -16,7 +16,6 @@ void matrix_multiply_ref(
     std::vector<T> &b,
     std::vector<T> &c,
     size_t m, size_t n, size_t k) {
-
     size_t lda = k, ldb = n, ldc = n;
 
     for (size_t i = 0; i < m; i++) {
@@ -147,6 +146,11 @@ void matrix_multiply_nd_range_slm(sycl::queue &q, T *a, T *b, T *c, size_t m, si
 
 int main() {
     using dtype = float;
+    constexpr uint16_t wg_size = 32;
+    constexpr uint8_t sg_size = 32;
+    constexpr uint8_t wi_size = 4;
+
+    size_t secs = 10;
     size_t loop = 1000;
     size_t m = 1024, n = 1024, k = 1024; // 2G FLOPs
 
@@ -162,7 +166,7 @@ int main() {
     q.memcpy(d_b, b.data(), b.size() * sizeof(dtype)).wait();
 
     std::cout << "matrix_multiply_ref:\n";
-    benchmark_func(10, [&]() {
+    benchmark_func_by_time(secs, [&]() {
         matrix_multiply_ref<dtype>(a, b, c, m, n, k);
     });
 
@@ -170,16 +174,17 @@ int main() {
     std::vector<std::tuple<std::string, func_t> > funcs{
         {"matrix_multiply_mkl", matrix_multiply_mkl<dtype>},
         {"matrix_multiply_naive", matrix_multiply_naive<dtype>},
-        {"matrix_multiply_nd_range", matrix_multiply_nd_range<dtype, 32, 32>},
-        {"matrix_multiply_nd_range_vec", matrix_multiply_nd_range_vec<dtype, 32, 32, 4>},
-        {"matrix_multiply_nd_range_slm", matrix_multiply_nd_range_slm<dtype, 32, 32>}
+        {"matrix_multiply_nd_range", matrix_multiply_nd_range<dtype, wg_size, sg_size>},
+        {"matrix_multiply_nd_range_vec", matrix_multiply_nd_range_vec<dtype, wg_size, sg_size, wi_size>},
+        {"matrix_multiply_nd_range_slm", matrix_multiply_nd_range_slm<dtype, wg_size, sg_size>}
     };
 
     for (auto [func_name,func]: funcs) {
         std::cout << "\n" << func_name << ":\n";
         q.fill(d_c, dtype{0}, c.size()).wait();
-        benchmark_sycl_kernel(loop, q, [&](sycl::queue &q) {
+        benchmark_func_by_time(secs, [&]() {
             func(q, d_a, d_b, d_c, m, n, k);
+            q.wait();
         });
         acc_check(q, c, d_c);
     }

@@ -91,6 +91,7 @@ int main() {
     constexpr uint8_t sg_size = 32;
     constexpr uint8_t wi_size = 4;
 
+    size_t secs = 10;
     size_t loop = 1000;
     size_t size = 100 * 1024 * 1024; // 100M elements
 
@@ -114,8 +115,9 @@ int main() {
     for (auto [func_name,func]: funcs) {
         std::cout << "\n" << func_name << ":\n";
         q.fill(p2, dtype{0}, size).wait();
-        benchmark_sycl_kernel(loop, q, [&](sycl::queue &q) {
+        benchmark_func_by_time(secs, [&]() {
             func(q, p1, p2, size);
+            q.wait();
         });
         acc_check(q, vec, p2);
     }

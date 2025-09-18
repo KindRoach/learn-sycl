@@ -150,6 +150,7 @@ int main() {
     constexpr uint8_t sg_size = 32;
     constexpr uint8_t wi_size = 4;
 
+    size_t secs = 10;
     size_t loop = 100;
     size_t m = 20 * 1024, n = 5 * 1024; // 100M elements
 
@@ -158,7 +159,7 @@ int main() {
     random_fill(matrix);
 
     std::cout << "matrix_transpose_ref:\n";
-    benchmark_func(10, [&] { matrix_transpose_ref(matrix, out, m, n); });
+    benchmark_func_by_time(secs, [&] { matrix_transpose_ref(matrix, out, m, n); });
 
     sycl::queue q{gpu_selector_by_cu, sycl::property::queue::in_order()};
     auto *p_matrix = sycl::malloc_device<dtype>(size, q);
@@ -204,8 +205,9 @@ int main() {
     for (auto [func_name,func]: funcs) {
         std::cout << "\n" << func_name << ":\n";
         q.fill(p_out, dtype{0}, size).wait();
-        benchmark_sycl_kernel(loop, q, [&](sycl::queue &q) {
+        benchmark_func_by_time(secs, [&]() {
             func(q, p_matrix, p_out, m, n);
+            q.wait();
         });
         acc_check(q, out, p_out);
     }

@@ -96,6 +96,7 @@ int main(int argc, char *argv[]) {
     constexpr uint8_t sg_size = 32;
     constexpr uint8_t wi_size = 4;
 
+    size_t secs = 10;
     size_t loop = 1000;
     size_t size = 100 * 1024 * 1024; // 100M elements
 
@@ -104,7 +105,7 @@ int main(int argc, char *argv[]) {
     random_fill(b);
 
     std::cout << "vector_add_ref:\n";
-    benchmark_func(loop, [&] { vector_add_ref(a, b, c); });
+    benchmark_func_by_time(secs, [&] { vector_add_ref(a, b, c); });
 
     sycl::queue q{gpu_selector_by_cu, sycl::property::queue::in_order()};
     auto *p_a = sycl::malloc_device<dtype>(size, q);
@@ -125,8 +126,9 @@ int main(int argc, char *argv[]) {
     for (auto [func_name,func]: funcs) {
         std::cout << "\n" << func_name << ":\n";
         q.fill(p_c, dtype{0}, size).wait();
-        benchmark_sycl_kernel(loop, q, [&](sycl::queue &q) {
+        benchmark_func_by_time(secs, [&]() {
             func(q, p_a, p_b, p_c, size);
+            q.wait();
         });
         acc_check(q, c, p_c);
     }

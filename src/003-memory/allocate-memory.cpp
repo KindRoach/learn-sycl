@@ -9,8 +9,8 @@ void test_mem(sycl::queue &q, T *device_prt, size_t size) {
     // write
     q.parallel_for({size}, [=](sycl::id<1> id) {
         size_t i = id.get(0);
-        device_prt[i] = T{i};
-    });
+        device_prt[i] = static_cast<T>(i);
+    }).wait();
 
     // read
     q.submit([&](sycl::handler &h) {

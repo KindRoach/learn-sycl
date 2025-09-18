@@ -14,7 +14,7 @@ void test_local_memory(sycl::queue &q) {
             size_t slm_read_id = local_id;
             size_t slm_write_id = WG_SIZE - local_id - 1;
 
-            slm[slm_read_id] = T{global_id};
+            slm[slm_read_id] = static_cast<T>(global_id);
             item_id.barrier(sycl::access::fence_space::local_space);
             stream << "global id = " << global_id
                     << ", local id = " << local_id
