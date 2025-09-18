@@ -124,18 +124,18 @@ void matrix_multiply_nd_range_slm(sycl::queue &q, T *a, T *b, T *c, size_t m, si
                 size_t i = item.get_global_id(0);
                 size_t j = item.get_global_id(1);
 
-                size_t x = item.get_local_id(0);
-                size_t y = item.get_local_id(1);
+                size_t l_i = item.get_local_id(0);
+                size_t l_j = item.get_local_id(1);
 
                 T sum = 0;
                 for (size_t p = 0; p < k; p += WG_SIZE) {
-                    slm_a[x][y] = mat(a, lda, i, p + y);
-                    slm_b[x][y] = mat(b, ldb, p + x, j);
+                    slm_a[l_i][l_j] = mat(a, lda, i, p + l_j);
+                    slm_b[l_i][l_j] = mat(b, ldb, p + l_i, j);
 
                     item.barrier();
 
                     for (size_t tile_k = 0; tile_k < WG_SIZE; tile_k++) {
-                        sum += slm_a[x][tile_k] * slm_b[tile_k][y];
+                        sum += slm_a[l_i][tile_k] * slm_b[tile_k][l_j];
                     }
                     item.barrier();
                 }
@@ -143,6 +143,43 @@ void matrix_multiply_nd_range_slm(sycl::queue &q, T *a, T *b, T *c, size_t m, si
             });
     });
 }
+
+template<typename T, uint16_t WG_SIZE, uint8_t SG_SIZE, uint8_t WI_SIZE>
+void matrix_multiply_nd_range_slm_multi_k(sycl::queue &q, T *a, T *b, T *c, size_t m, size_t n, size_t k) {
+    size_t lda = k, ldb = n, ldc = n;
+    constexpr uint16_t K_SIZE = WG_SIZE * WI_SIZE;
+
+    q.submit([&](sycl::handler &cgh) {
+        sycl::local_accessor<T, 2> slm_a{{WG_SIZE, K_SIZE}, cgh};
+        sycl::local_accessor<T, 2> slm_b{{K_SIZE, WG_SIZE}, cgh};
+
+        cgh.parallel_for(
+            sycl::nd_range<2>{{m, n}, {WG_SIZE, WG_SIZE}},
+            [=](sycl::nd_item<2> item) [[sycl::reqd_sub_group_size(SG_SIZE)]] {
+                size_t i = item.get_global_id(0);
+                size_t j = item.get_global_id(1);
+
+                size_t l_i = item.get_local_id(0);
+                size_t l_j = item.get_local_id(1);
+
+                T sum = 0;
+                for (size_t p = 0; p < k; p += K_SIZE) {
+                    for (size_t g = 0; g < K_SIZE; g += WG_SIZE) {
+                        slm_a[l_i][l_j + g] = mat(a, lda, i, p + l_j + g);
+                        slm_b[l_i + g][l_j] = mat(b, ldb, p + l_i + g, j);
+                    }
+                    item.barrier();
+
+                    for (size_t tile_k = 0; tile_k < K_SIZE; tile_k++) {
+                        sum += slm_a[l_i][tile_k] * slm_b[tile_k][l_j];
+                    }
+                    item.barrier();
+                }
+                mat(c, ldc, i, j) = sum;
+            });
+    });
+}
+
 
 int main() {
     using dtype = float;
@@ -176,7 +213,8 @@ int main() {
         {"matrix_multiply_naive", matrix_multiply_naive<dtype>},
         {"matrix_multiply_nd_range", matrix_multiply_nd_range<dtype, wg_size, sg_size>},
         {"matrix_multiply_nd_range_vec", matrix_multiply_nd_range_vec<dtype, wg_size, sg_size, wi_size>},
-        {"matrix_multiply_nd_range_slm", matrix_multiply_nd_range_slm<dtype, wg_size, sg_size>}
+        {"matrix_multiply_nd_range_slm", matrix_multiply_nd_range_slm<dtype, wg_size, sg_size>},
+        {"matrix_multiply_nd_range_slm_multi_k", matrix_multiply_nd_range_slm_multi_k<dtype, wg_size, sg_size, wi_size>},
     };
 
     for (auto [func_name,func]: funcs) {
