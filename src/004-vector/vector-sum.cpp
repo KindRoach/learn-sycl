@@ -4,6 +4,7 @@
 
 #include "util/bench.hpp"
 #include "util/device.hpp"
+#include "util/validate.hpp"
 #include "util/vector.hpp"
 
 template<typename T>
@@ -42,8 +43,8 @@ void vector_sum_reduction(sycl::queue &q, T *vec, T *out, size_t size) {
 
 template<
     typename T,
-    uint16_t WG_SIZE,
-    uint8_t SG_SIZE
+    size_t WG_SIZE,
+    size_t SG_SIZE
 >
 void vector_sum_group_reduce_recursion(sycl::queue &q, T *vec, T *out, size_t size) {
     size_t group_num = (size + WG_SIZE - 1) / WG_SIZE;
@@ -74,16 +75,17 @@ void vector_sum_group_reduce_recursion(sycl::queue &q, T *vec, T *out, size_t si
                     out[0] = group_sum;
                 }
             });
-        q.wait();
     }
 }
 
 template<
     typename T,
-    uint16_t WG_SIZE,
-    uint8_t SG_SIZE
+    size_t WG_SIZE,
+    size_t SG_SIZE
 >
 void vector_sum_group_reduce_atomic_collect(sycl::queue &q, T *vec, T *out, size_t size) {
+    check_divisible(size, WG_SIZE, "Global size must be divisible by work-group size");
+
     q.single_task([=]() {
         out[0] = T{0};
     });
@@ -106,11 +108,13 @@ void vector_sum_group_reduce_atomic_collect(sycl::queue &q, T *vec, T *out, size
 
 template<
     typename T,
-    uint16_t WG_SIZE,
-    uint8_t SG_SIZE,
-    uint8_t WI_SIZE
+    size_t WG_SIZE,
+    size_t SG_SIZE,
+    size_t WI_SIZE
 >
 void vector_sum_group_reduce_atomic_collect_vec(sycl::queue &q, T *vec, T *out, size_t size) {
+    check_divisible(size, WG_SIZE * WI_SIZE, "Size must be divisible by WG_SIZE * WI_SIZE");
+
     q.single_task([=]() {
         out[0] = T{0};
     });
@@ -142,11 +146,13 @@ void vector_sum_group_reduce_atomic_collect_vec(sycl::queue &q, T *vec, T *out, 
 
 template<
     typename T,
-    uint16_t WG_SIZE,
-    uint8_t SG_SIZE,
-    uint8_t WI_SIZE
+    size_t WG_SIZE,
+    size_t SG_SIZE,
+    size_t WI_SIZE
 >
 void vector_sum_group_reduce_atomic_collect_sg(sycl::queue &q, T *vec, T *out, size_t size) {
+    check_divisible(size, WG_SIZE * WI_SIZE, "Size must be divisible by WG_SIZE * WI_SIZE");
+
     q.single_task([=]() {
         out[0] = T{0};
     });

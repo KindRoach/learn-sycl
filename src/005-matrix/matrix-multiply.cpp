@@ -4,6 +4,7 @@
 #include "util/bench.hpp"
 #include "util/device.hpp"
 #include "util/memory.hpp"
+#include "util/validate.hpp"
 #include "util/vector.hpp"
 
 // A : [m,k] in row-major
@@ -17,7 +18,6 @@ void matrix_multiply_ref(
     std::vector<T> &c,
     size_t m, size_t n, size_t k) {
     size_t lda = k, ldb = n, ldc = n;
-
     for (size_t i = 0; i < m; i++) {
         for (size_t j = 0; j < n; j++) {
             T sum = 0;
@@ -52,7 +52,6 @@ void matrix_multiply_mkl(sycl::queue &q, T *a, T *b, T *c, size_t m, size_t n, s
 template<typename T>
 void matrix_multiply_naive(sycl::queue &q, T *a, T *b, T *c, size_t m, size_t n, size_t k) {
     size_t lda = k, ldb = n, ldc = n;
-
     q.parallel_for({m, n}, [=](sycl::id<2> idx) {
         size_t i = idx[0];
         size_t j = idx[1];
@@ -64,10 +63,12 @@ void matrix_multiply_naive(sycl::queue &q, T *a, T *b, T *c, size_t m, size_t n,
     });
 }
 
-template<typename T, uint16_t WG_SIZE, uint8_t SG_SIZE>
+template<typename T, size_t WG_SIZE, size_t SG_SIZE>
 void matrix_multiply_nd_range(sycl::queue &q, T *a, T *b, T *c, size_t m, size_t n, size_t k) {
-    size_t lda = k, ldb = n, ldc = n;
+    check_divisible(m, WG_SIZE, "M must be divisible by WG_SIZE");
+    check_divisible(n, WG_SIZE, "N must be divisible by WG_SIZE");
 
+    size_t lda = k, ldb = n, ldc = n;
     q.parallel_for(
         sycl::nd_range<2>{{m, n}, {WG_SIZE, WG_SIZE}},
         [=](sycl::nd_item<2> item) [[sycl::reqd_sub_group_size(SG_SIZE)]] {
@@ -82,10 +83,13 @@ void matrix_multiply_nd_range(sycl::queue &q, T *a, T *b, T *c, size_t m, size_t
         });
 }
 
-template<typename T, uint16_t WG_SIZE, uint8_t SG_SIZE, uint8_t WI_SIZE>
+template<typename T, size_t WG_SIZE, size_t SG_SIZE, size_t WI_SIZE>
 void matrix_multiply_nd_range_vec(sycl::queue &q, T *a, T *b, T *c, size_t m, size_t n, size_t k) {
-    size_t lda = k, ldb = n, ldc = n;
+    check_divisible(m, WG_SIZE, "M must be divisible by WG_SIZE");
+    check_divisible(n, WG_SIZE, "N must be divisible by WG_SIZE");
+    check_divisible(k, WI_SIZE, "K must be divisible by WI_SIZE");
 
+    size_t lda = k, ldb = n, ldc = n;
     q.parallel_for(
         sycl::nd_range<2>{{m, n}, {WG_SIZE, WG_SIZE}},
         [=](sycl::nd_item<2> item) [[sycl::reqd_sub_group_size(SG_SIZE)]] {
@@ -110,10 +114,13 @@ void matrix_multiply_nd_range_vec(sycl::queue &q, T *a, T *b, T *c, size_t m, si
         });
 }
 
-template<typename T, uint16_t WG_SIZE, uint8_t SG_SIZE>
+template<typename T, size_t WG_SIZE, size_t SG_SIZE>
 void matrix_multiply_nd_range_slm(sycl::queue &q, T *a, T *b, T *c, size_t m, size_t n, size_t k) {
-    size_t lda = k, ldb = n, ldc = n;
+    check_divisible(m, WG_SIZE, "M must be divisible by WG_SIZE");
+    check_divisible(n, WG_SIZE, "N must be divisible by WG_SIZE");
+    check_divisible(k, WG_SIZE, "K must be divisible by WG_SIZE");
 
+    size_t lda = k, ldb = n, ldc = n;
     q.submit([&](sycl::handler &cgh) {
         sycl::local_accessor<T, 2> slm_a{{WG_SIZE, WG_SIZE}, cgh};
         sycl::local_accessor<T, 2> slm_b{{WG_SIZE, WG_SIZE}, cgh};
@@ -144,10 +151,13 @@ void matrix_multiply_nd_range_slm(sycl::queue &q, T *a, T *b, T *c, size_t m, si
     });
 }
 
-template<typename T, uint16_t WG_SIZE>
+template<typename T, size_t WG_SIZE>
 void matrix_multiply_subgroup_broadcast(sycl::queue &q, T *a, T *b, T *c, size_t m, size_t n, size_t k) {
-    size_t lda = k, ldb = n, ldc = n;
+    check_divisible(m, WG_SIZE, "M must be divisible by WG_SIZE");
+    check_divisible(n, WG_SIZE, "N must be divisible by WG_SIZE");
+    check_divisible(k, WG_SIZE, "K must be divisible by WG_SIZE");
 
+    size_t lda = k, ldb = n, ldc = n;
     q.submit([&](sycl::handler &h) {
         h.parallel_for(
             sycl::nd_range<2>{{m, n}, {WG_SIZE, WG_SIZE}},

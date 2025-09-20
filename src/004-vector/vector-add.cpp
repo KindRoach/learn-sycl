@@ -3,6 +3,7 @@
 
 #include "util/bench.hpp"
 #include "util/device.hpp"
+#include "util/validate.hpp"
 #include "util/vector.hpp"
 
 void vector_add_ref(const std::vector<float> &a, const std::vector<float> &b, std::vector<float> &c) {
@@ -21,10 +22,12 @@ void vector_add_naive(sycl::queue &q, T *a, T *b, T *c, size_t size) {
 
 template<
     typename T,
-    uint16_t WG_SIZE,
-    uint8_t SG_SIZE
+    size_t WG_SIZE,
+    size_t SG_SIZE
 >
 void vector_add_nd_range(sycl::queue &q, T *a, T *b, T *c, size_t size) {
+    check_divisible(size, WG_SIZE, "Global size must be divisible by work-group size");
+
     q.parallel_for(
         sycl::nd_range<1>{size, WG_SIZE},
         [=](sycl::nd_item<1> item) [[sycl::reqd_sub_group_size(SG_SIZE)]] {
@@ -35,11 +38,13 @@ void vector_add_nd_range(sycl::queue &q, T *a, T *b, T *c, size_t size) {
 
 template<
     typename T,
-    uint16_t WG_SIZE,
-    uint8_t SG_SIZE,
-    uint8_t WI_SIZE
+    size_t WG_SIZE,
+    size_t SG_SIZE,
+    size_t WI_SIZE
 >
 void vector_add_workitem_continue(sycl::queue &q, T *a, T *b, T *c, size_t size) {
+    check_divisible(size, WG_SIZE * WI_SIZE, "Size must be divisible by WG_SIZE * WI_SIZE");
+
     q.parallel_for(
         sycl::nd_range<1>{size / WI_SIZE, WG_SIZE},
         [=](sycl::nd_item<1> item) [[sycl::reqd_sub_group_size(SG_SIZE)]] {
@@ -52,11 +57,13 @@ void vector_add_workitem_continue(sycl::queue &q, T *a, T *b, T *c, size_t size)
 
 template<
     typename T,
-    uint16_t WG_SIZE,
-    uint8_t SG_SIZE,
-    uint8_t WI_SIZE
+    size_t WG_SIZE,
+    size_t SG_SIZE,
+    size_t WI_SIZE
 >
 void vector_add_with_vec(sycl::queue &q, T *a, T *b, T *c, size_t size) {
+    check_divisible(size, WG_SIZE * WI_SIZE, "Size must be divisible by WG_SIZE * WI_SIZE");
+
     q.parallel_for(
         sycl::nd_range<1>{size / WI_SIZE, WG_SIZE},
         [=](sycl::nd_item<1> item) [[sycl::reqd_sub_group_size(SG_SIZE)]] {
@@ -71,18 +78,20 @@ void vector_add_with_vec(sycl::queue &q, T *a, T *b, T *c, size_t size) {
 
 template<
     typename T,
-    uint16_t WG_SIZE,
-    uint8_t SG_SIZE,
-    uint8_t WI_SIZE
+    size_t WG_SIZE,
+    size_t SG_SIZE,
+    size_t WI_SIZE
 >
 void vector_add_subgroup_continue(sycl::queue &q, T *a, T *b, T *c, size_t size) {
+    check_divisible(size, WG_SIZE * WI_SIZE, "Size must be divisible by WG_SIZE * WI_SIZE");
+
     q.parallel_for(
         sycl::nd_range<1>{size / WI_SIZE, WG_SIZE},
         [=](sycl::nd_item<1> item) [[sycl::reqd_sub_group_size(SG_SIZE)]] {
             size_t wg_offset = item.get_group(0) * WG_SIZE * WI_SIZE;
             size_t sg_offset = item.get_sub_group().get_group_id()[0] * SG_SIZE * WI_SIZE;
             size_t wi_offset = item.get_sub_group().get_local_id()[0];
-            size_t offset = wg_offset + wi_offset + sg_offset;
+            size_t offset = wg_offset + sg_offset + wi_offset;
             for (size_t j = 0; j < WI_SIZE * SG_SIZE; j += SG_SIZE) {
                 c[offset + j] = a[offset + j] + b[offset + j];
             }

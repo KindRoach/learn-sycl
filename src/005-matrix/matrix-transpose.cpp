@@ -3,6 +3,7 @@
 #include "util/bench.hpp"
 #include "util/device.hpp"
 #include "util/memory.hpp"
+#include "util/validate.hpp"
 #include "util/vector.hpp"
 
 // In  : [m,n] in row-major
@@ -39,8 +40,11 @@ void matrix_transpose_naive_write_continue(sycl::queue &q, T *in, T *out, size_t
     });
 }
 
-template<typename T, uint16_t WG_SIZE, uint8_t SG_SIZE>
+template<typename T, size_t WG_SIZE, size_t SG_SIZE>
 void matrix_transpose_nd_range_read_continue(sycl::queue &q, T *in, T *out, size_t m, size_t n) {
+    check_divisible(m, WG_SIZE, "M must be divisible by WG_SIZE");
+    check_divisible(n, WG_SIZE, "N must be divisible by WG_SIZE");
+
     size_t ld_in = n, ld_out = m;
     q.parallel_for(
         sycl::nd_range<2>{{m, n}, {WG_SIZE, WG_SIZE}},
@@ -51,8 +55,11 @@ void matrix_transpose_nd_range_read_continue(sycl::queue &q, T *in, T *out, size
         });
 }
 
-template<typename T, uint16_t WG_SIZE, uint8_t SG_SIZE>
+template<typename T, size_t WG_SIZE, size_t SG_SIZE>
 void matrix_transpose_nd_range_write_continue(sycl::queue &q, T *in, T *out, size_t m, size_t n) {
+    check_divisible(m, WG_SIZE, "M must be divisible by WG_SIZE");
+    check_divisible(n, WG_SIZE, "N must be divisible by WG_SIZE");
+
     size_t ld_in = n, ld_out = m;
     q.parallel_for(
         sycl::nd_range<2>{{n, m}, {WG_SIZE, WG_SIZE}},
@@ -63,8 +70,11 @@ void matrix_transpose_nd_range_write_continue(sycl::queue &q, T *in, T *out, siz
         });
 }
 
-template<typename T, uint16_t WG_SIZE, uint8_t SG_SIZE, uint8_t WI_SIZE>
+template<typename T, size_t WG_SIZE, size_t SG_SIZE, size_t WI_SIZE>
 void matrix_transpose_nd_range_read_continue_vec(sycl::queue &q, T *in, T *out, size_t m, size_t n) {
+    check_divisible(m, WG_SIZE, "M must be divisible by WG_SIZE");
+    check_divisible(n, WG_SIZE * WI_SIZE, "N must be divisible by WG_SIZE * WI_SIZE");
+
     size_t ld_in = n, ld_out = m;
     q.parallel_for(
         sycl::nd_range<2>{{m, n / WI_SIZE}, {WG_SIZE, WG_SIZE}},
@@ -79,8 +89,11 @@ void matrix_transpose_nd_range_read_continue_vec(sycl::queue &q, T *in, T *out, 
         });
 }
 
-template<typename T, uint16_t WG_SIZE, uint8_t SG_SIZE, uint8_t WI_SIZE>
+template<typename T, size_t WG_SIZE, size_t SG_SIZE, size_t WI_SIZE>
 void matrix_transpose_nd_range_write_continue_vec(sycl::queue &q, T *in, T *out, size_t m, size_t n) {
+    check_divisible(m, WG_SIZE, "M must be divisible by WG_SIZE");
+    check_divisible(n, WG_SIZE * WI_SIZE, "N must be divisible by WG_SIZE * WI_SIZE");
+
     size_t ld_in = n, ld_out = m;
     q.parallel_for(
         sycl::nd_range<2>{{n, m / WI_SIZE}, {WG_SIZE, WG_SIZE}},
@@ -95,8 +108,11 @@ void matrix_transpose_nd_range_write_continue_vec(sycl::queue &q, T *in, T *out,
         });
 }
 
-template<typename T, uint16_t WG_SIZE, uint8_t SG_SIZE, uint8_t WI_SIZE>
+template<typename T, size_t WG_SIZE, size_t SG_SIZE, size_t WI_SIZE>
 void matrix_transpose_nd_range_tile_vec(sycl::queue &q, T *in, T *out, size_t m, size_t n) {
+    check_divisible(m, WG_SIZE * WI_SIZE, "M must be divisible by WG_SIZE * WI_SIZE");
+    check_divisible(n, WG_SIZE * WI_SIZE, "N must be divisible by WG_SIZE * WI_SIZE");
+
     size_t ld_in = n, ld_out = m;
     q.parallel_for(
         sycl::nd_range<2>{{m / WI_SIZE, n / WI_SIZE}, {WG_SIZE, WG_SIZE}},
@@ -122,8 +138,11 @@ void matrix_transpose_nd_range_tile_vec(sycl::queue &q, T *in, T *out, size_t m,
         });
 }
 
-template<typename T, uint16_t WG_SIZE, uint8_t SG_SIZE>
+template<typename T, size_t WG_SIZE, size_t SG_SIZE>
 void matrix_transpose_nd_range_tile_slm(sycl::queue &q, T *in, T *out, size_t m, size_t n) {
+    check_divisible(m, WG_SIZE, "M must be divisible by WG_SIZE");
+    check_divisible(n, WG_SIZE, "N must be divisible by WG_SIZE");
+
     size_t ld_in = n, ld_out = m;
     q.submit([&](sycl::handler &h) {
         sycl::local_accessor<T, 2> slm{{WG_SIZE, WG_SIZE}, h};
