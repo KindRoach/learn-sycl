@@ -144,37 +144,27 @@ void matrix_multiply_nd_range_slm(sycl::queue &q, T *a, T *b, T *c, size_t m, si
     });
 }
 
-template<typename T, uint16_t WG_SIZE, uint8_t SG_SIZE, uint8_t WI_SIZE>
-void matrix_multiply_nd_range_slm_multi_k(sycl::queue &q, T *a, T *b, T *c, size_t m, size_t n, size_t k) {
+template<typename T, uint16_t WG_SIZE>
+void matrix_multiply_subgroup_broadcast(sycl::queue &q, T *a, T *b, T *c, size_t m, size_t n, size_t k) {
     size_t lda = k, ldb = n, ldc = n;
-    constexpr uint16_t K_SIZE = WG_SIZE * WI_SIZE;
 
-    q.submit([&](sycl::handler &cgh) {
-        sycl::local_accessor<T, 2> slm_a{{WG_SIZE, K_SIZE}, cgh};
-        sycl::local_accessor<T, 2> slm_b{{K_SIZE, WG_SIZE}, cgh};
-
-        cgh.parallel_for(
+    q.submit([&](sycl::handler &h) {
+        h.parallel_for(
             sycl::nd_range<2>{{m, n}, {WG_SIZE, WG_SIZE}},
-            [=](sycl::nd_item<2> item) [[sycl::reqd_sub_group_size(SG_SIZE)]] {
-                size_t i = item.get_global_id(0);
-                size_t j = item.get_global_id(1);
-
-                size_t l_i = item.get_local_id(0);
-                size_t l_j = item.get_local_id(1);
+            [=](sycl::nd_item<2> it) [[sycl::reqd_sub_group_size(WG_SIZE)]] {
+                size_t i = it.get_global_id(0);
+                size_t j = it.get_global_id(1);
+                size_t local_j = it.get_local_id(1);
 
                 T sum = 0;
-                for (size_t p = 0; p < k; p += K_SIZE) {
-                    for (size_t g = 0; g < K_SIZE; g += WG_SIZE) {
-                        slm_a[l_i][l_j + g] = mat(a, lda, i, p + l_j + g);
-                        slm_b[l_i + g][l_j] = mat(b, ldb, p + l_i + g, j);
+                for (size_t t = 0; t < k; t += WG_SIZE) {
+                    T a_i_tile_j = mat(a, lda, i, t + local_j);
+                    for (size_t tile_k = 0; tile_k < WG_SIZE; tile_k++) {
+                        T a_i_tile_k = group_broadcast(it.get_sub_group(), a_i_tile_j, tile_k);
+                        sum += a_i_tile_k * mat(b, ldb, t + tile_k, j);
                     }
-                    item.barrier();
-
-                    for (size_t tile_k = 0; tile_k < K_SIZE; tile_k++) {
-                        sum += slm_a[l_i][tile_k] * slm_b[tile_k][l_j];
-                    }
-                    item.barrier();
                 }
+
                 mat(c, ldc, i, j) = sum;
             });
     });
@@ -214,7 +204,7 @@ int main() {
         {"matrix_multiply_nd_range", matrix_multiply_nd_range<dtype, wg_size, sg_size>},
         {"matrix_multiply_nd_range_vec", matrix_multiply_nd_range_vec<dtype, wg_size, sg_size, wi_size>},
         {"matrix_multiply_nd_range_slm", matrix_multiply_nd_range_slm<dtype, wg_size, sg_size>},
-        {"matrix_multiply_nd_range_slm_multi_k", matrix_multiply_nd_range_slm_multi_k<dtype, wg_size, sg_size, wi_size>},
+        {"matrix_multiply_subgroup_broadcast", matrix_multiply_subgroup_broadcast<dtype, wg_size>},
     };
 
     for (auto [func_name,func]: funcs) {
