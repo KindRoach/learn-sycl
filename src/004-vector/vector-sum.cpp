@@ -207,40 +207,34 @@ int main() {
     q.memcpy(vec_p, vec.data(), size * sizeof(dtype)).wait();
 
     using func_t = std::function<void(sycl::queue &, dtype *, dtype *, size_t)>;
-    std::vector<std::tuple<std::string, func_t, size_t> > funcs{
+    std::vector<std::tuple<std::string, func_t> > funcs{
         {
             "vector_sum_atomic",
             vector_sum_atomic<dtype>,
-            loop / 100
         },
         {
             "vector_sum_reduction",
             vector_sum_reduction<dtype>,
-            loop
         },
         {
             "vector_sum_group_reduce_atomic_collect",
             vector_sum_group_reduce_atomic_collect<dtype, wg_size, sg_size>,
-            loop
         },
         {
             "vector_sum_group_reduce_recursion",
             vector_sum_group_reduce_recursion<dtype, wg_size, sg_size>,
-            loop
         },
         {
             "vector_sum_group_reduce_atomic_collect_vec",
             vector_sum_group_reduce_atomic_collect_vec<dtype, wg_size, sg_size, wi_size>,
-            loop
         },
         {
             "vector_sum_group_reduce_atomic_collect_sg",
             vector_sum_group_reduce_atomic_collect_sg<dtype, wg_size, sg_size, wi_size>,
-            loop
         },
     };
 
-    for (auto [func_name,func, loop]: funcs) {
+    for (auto [func_name,func]: funcs) {
         std::cout << "\n" << func_name << ":\n";
         q.fill(out_p, dtype{0}, 1).wait();
         benchmark_func_by_time(secs, [&]() {
