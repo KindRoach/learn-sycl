@@ -27,6 +27,12 @@ int main() {
     namespace info = sycl::ext::oneapi::experimental::info;
     sycl::queue q{gpu_selector_by_cu};
     std::vector<matrix::combination> combinations = q.get_device().get_info<info::device::matrix_combinations>();
+
+    if (combinations.empty()) {
+        std::cout << "No XMX found." << std::endl;
+        return 0;
+    }
+
     for (auto &comb: combinations) {
         std::cout << "type a,b,c,d=" << to_string(comb.atype) << "," << to_string(comb.btype) << "," <<
                 to_string(comb.ctype) << "," << to_string(comb.dtype) << ",";
