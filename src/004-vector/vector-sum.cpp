@@ -2,10 +2,7 @@
 #include <numeric>
 #include <sycl/sycl.hpp>
 
-#include "util/bench.hpp"
-#include "util/device.hpp"
-#include "util/validate.hpp"
-#include "util/vector.hpp"
+#include "util/util.hpp"
 
 template<typename T>
 void vector_sum_ref(const std::vector<T> &vec, std::vector<T> &out) {
@@ -161,16 +158,14 @@ void vector_sum_group_reduce_atomic_collect_sg(sycl::queue &q, T *vec, T *out, s
         sycl::nd_range<1>{size / WI_SIZE, WG_SIZE},
         [=](sycl::nd_item<1> item) [[sycl::reqd_sub_group_size(SG_SIZE)]] {
             auto group = item.get_group();
-            size_t i = item.get_global_linear_id();
-
             size_t wg_offset = item.get_group(0) * WG_SIZE * WI_SIZE;
             size_t sg_offset = item.get_sub_group().get_group_id()[0] * SG_SIZE * WI_SIZE;
             size_t wi_offset = item.get_sub_group().get_local_id()[0];
             size_t offset = wg_offset + wi_offset + sg_offset;
 
             T sum_i = T{0};
-            for (size_t j = 0; j < WI_SIZE * SG_SIZE; j += SG_SIZE) {
-                sum_i += vec[offset + j];
+            for (size_t i = 0; i < WI_SIZE * SG_SIZE; i += SG_SIZE) {
+                sum_i += vec[offset + i];
             }
 
             float group_sum = reduce_over_group(group, sum_i, sycl::plus<>());
@@ -241,6 +236,6 @@ int main() {
             func(q, vec_p, out_p, size);
             q.wait();
         });
-        acc_check(q, out, out_p);
+        sycl_acc_check(q, out, out_p);
     }
 }

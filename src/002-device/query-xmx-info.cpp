@@ -1,7 +1,6 @@
-#include <iomanip>
 #include <sycl/sycl.hpp>
 
-#include "util/device.hpp"
+#include "util/util.hpp"
 
 inline std::string to_string(sycl::ext::oneapi::experimental::matrix::matrix_type type) {
     using namespace sycl::ext::oneapi::experimental::matrix;

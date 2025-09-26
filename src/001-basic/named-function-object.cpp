@@ -1,6 +1,6 @@
 #include <sycl/sycl.hpp>
 
-#include "util/device.hpp"
+#include "util/util.hpp"
 
 class MyKernel {
 public:

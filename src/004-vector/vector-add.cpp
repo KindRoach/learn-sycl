@@ -1,12 +1,10 @@
 #include <iostream>
 #include <sycl/sycl.hpp>
 
-#include "util/bench.hpp"
-#include "util/device.hpp"
-#include "util/validate.hpp"
-#include "util/vector.hpp"
+#include "util/util.hpp"
 
-void vector_add_ref(const std::vector<float> &a, const std::vector<float> &b, std::vector<float> &c) {
+template<typename T>
+void vector_add_ref(const std::vector<T> &a, const std::vector<T> &b, std::vector<T> &c) {
     for (int i = 0; i < c.size(); ++i) {
         c[i] = a[i] + b[i];
     }
@@ -139,6 +137,6 @@ int main(int argc, char *argv[]) {
             func(q, p_a, p_b, p_c, size);
             q.wait();
         });
-        acc_check(q, c, p_c);
+        sycl_acc_check(q, c, p_c);
     }
 }

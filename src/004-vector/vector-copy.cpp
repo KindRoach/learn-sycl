@@ -1,9 +1,6 @@
 #include <sycl/sycl.hpp>
 
-#include "util/device.hpp"
-#include "util/bench.hpp"
-#include "util/validate.hpp"
-#include "util/vector.hpp"
+#include "util/util.hpp"
 
 template<typename T>
 void vector_copy_naive(sycl::queue &q, T *src, T *out, size_t size) {
@@ -128,6 +125,6 @@ int main() {
             func(q, p1, p2, size);
             q.wait();
         });
-        acc_check(q, vec, p2);
+        sycl_acc_check(q, vec, p2);
     }
 }

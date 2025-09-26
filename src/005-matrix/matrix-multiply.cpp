@@ -1,11 +1,7 @@
 #include <sycl/sycl.hpp>
 #include <oneapi/mkl.hpp>
 
-#include "util/bench.hpp"
-#include "util/device.hpp"
-#include "util/memory.hpp"
-#include "util/validate.hpp"
-#include "util/vector.hpp"
+#include "util/util.hpp"
 
 // A : [m,k] in row-major
 // B : [k,n] in row-major
@@ -224,6 +220,6 @@ int main() {
             func(q, d_a, d_b, d_c, m, n, k);
             q.wait();
         });
-        acc_check(q, c, d_c);
+        sycl_acc_check(q, c, d_c);
     }
 }

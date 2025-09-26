@@ -2,6 +2,8 @@
 
 #include <sycl/sycl.hpp>
 
+#include "util/vector.hpp"
+
 std::string backend_to_string(sycl::backend backend) {
     switch (backend) {
         case sycl::backend::opencl:
@@ -55,4 +57,12 @@ inline int gpu_selector_by_cu(const sycl::device &dev) {
     }
 
     return priority;
+}
+
+template<typename T>
+void sycl_acc_check(sycl::queue &q, std::vector<T> &gt, T *device_ptr) {
+    size_t size = gt.size();
+    std::vector<T> actual(size);
+    q.memcpy(actual.data(), device_ptr, size * sizeof(T)).wait();
+    acc_check(gt, actual);
 }

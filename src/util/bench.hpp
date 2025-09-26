@@ -51,7 +51,7 @@ void benchmark_func_by_time(
     double warmup_ratio = 0.1
 ) {
     if (total_seconds <= 0) {
-        std::cerr << "Warning: total_seconds must be > 0, running func once.\n";
+        std::cerr << "Warning: total_seconds not lagger than 0, running func once.\n";
         func();
         return;
     }

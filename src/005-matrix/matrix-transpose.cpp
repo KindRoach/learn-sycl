@@ -1,10 +1,6 @@
 #include <sycl/sycl.hpp>
 
-#include "util/bench.hpp"
-#include "util/device.hpp"
-#include "util/memory.hpp"
-#include "util/validate.hpp"
-#include "util/vector.hpp"
+#include "util/util.hpp"
 
 // In  : [m,n] in row-major
 // Out : [n,m] in row-major
@@ -228,6 +224,6 @@ int main() {
             func(q, p_matrix, p_out, m, n);
             q.wait();
         });
-        acc_check(q, out, p_out);
+        sycl_acc_check(q, out, p_out);
     }
 }

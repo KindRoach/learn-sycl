@@ -1,6 +1,6 @@
 #include <sycl/sycl.hpp>
 
-#include "util/device.hpp"
+#include "util/util.hpp"
 
 
 template<int WG_SIZE, int SG_SIZE>

@@ -1,10 +1,7 @@
 #include <iostream>
 #include <numeric>
 
-#include "util/bench.hpp"
-#include "util/device.hpp"
-#include "util/validate.hpp"
-#include "util/vector.hpp"
+#include "util/util.hpp"
 
 template<typename T>
 void vector_dot_ref(const std::vector<T> &a, const std::vector<T> &b, std::vector<T> &out) {
@@ -145,6 +142,6 @@ int main() {
             func(q, p_a, p_b, p_out, size);
             q.wait();
         });
-        acc_check(q, out, p_out);
+        sycl_acc_check(q, out, p_out);
     }
 }

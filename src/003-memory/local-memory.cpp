@@ -1,6 +1,6 @@
 #include <sycl/sycl.hpp>
 
-#include "util/device.hpp"
+#include "util/util.hpp"
 
 template<typename T, uint16_t WG_SIZE>
 void test_local_memory(sycl::queue &q) {

@@ -1,6 +1,6 @@
 #include <sycl/sycl.hpp>
 
-#include "util/device.hpp"
+#include "util/util.hpp"
 
 template<typename T>
 void test_mem(sycl::queue &q, T *device_prt, size_t size) {

@@ -1,6 +1,6 @@
 #include <sycl/sycl.hpp>
 
-#include "util/device.hpp"
+#include "util/util.hpp"
 
 template<typename T, uint8_t SIZE>
 void test_vec(sycl::queue &q, T *p, size_t m, size_t n) {
