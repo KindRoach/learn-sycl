@@ -4,39 +4,48 @@
 #include "util/util.hpp"
 
 // A : [m,k] in row-major
-// B : [k,n] in row-major
+// B : [k,n] in row-major or col-major
 // C = A x B : [m,n] in row-major
 
-template<typename T>
+enum layout {
+    row_major,
+    col_major
+};
+
+template<typename T, layout b_layout>
 void matrix_multiply_ref(
     std::vector<T> &a,
     std::vector<T> &b,
     std::vector<T> &c,
     size_t m, size_t n, size_t k) {
-    size_t lda = k, ldb = n, ldc = n;
+    size_t lda = k, ldb = b_layout == row_major ? n : k, ldc = n;
     for (size_t i = 0; i < m; i++) {
         for (size_t j = 0; j < n; j++) {
             T sum = 0;
             for (size_t p = 0; p < k; p++) {
-                sum += mat(a.data(), lda, i, p) * mat(b.data(), ldb, p, j);
+                if constexpr (b_layout == row_major) {
+                    sum += mat(a.data(), lda, i, p) * mat(b.data(), ldb, p, j);
+                } else {
+                    sum += mat(a.data(), lda, i, p) * mat(b.data(), ldb, j, p);
+                }
             }
             mat(c.data(), ldc, i, j) = sum;
         }
     }
 }
 
-template<typename T>
+template<typename T, layout b_layout>
 void matrix_multiply_mkl(sycl::queue &q, T *a, T *b, T *c, size_t m, size_t n, size_t k) {
     try {
         // oneMKL gemm: submits to the provided SYCL queue and returns an event.
         oneapi::mkl::blas::gemm(
             q,
             oneapi::mkl::transpose::nontrans,
-            oneapi::mkl::transpose::nontrans,
+            b_layout == row_major ? oneapi::mkl::transpose::nontrans : oneapi::mkl::transpose::trans,
             m, n, k,
             1.0f,
             a, k,
-            b, n,
+            b, b_layout == row_major ? n : k,
             0.0f,
             c, n);
     } catch (const std::exception &e) {
@@ -45,26 +54,30 @@ void matrix_multiply_mkl(sycl::queue &q, T *a, T *b, T *c, size_t m, size_t n, s
     }
 }
 
-template<typename T>
+template<typename T, layout b_layout>
 void matrix_multiply_naive(sycl::queue &q, T *a, T *b, T *c, size_t m, size_t n, size_t k) {
-    size_t lda = k, ldb = n, ldc = n;
+    size_t lda = k, ldb = b_layout == row_major ? n : k, ldc = n;
     q.parallel_for({m, n}, [=](sycl::id<2> idx) {
         size_t i = idx[0];
         size_t j = idx[1];
         T sum = 0;
         for (size_t p = 0; p < k; p++) {
-            sum += mat(a, lda, i, p) * mat(b, ldb, p, j);
+            if constexpr (b_layout == row_major) {
+                sum += mat(a, lda, i, p) * mat(b, ldb, p, j);
+            } else {
+                sum += mat(a, lda, i, p) * mat(b, ldb, j, p);
+            }
         }
         mat(c, ldc, i, j) = sum;
     });
 }
 
-template<typename T, size_t WG_SIZE, size_t SG_SIZE>
+template<typename T, size_t WG_SIZE, size_t SG_SIZE, layout b_layout>
 void matrix_multiply_nd_range(sycl::queue &q, T *a, T *b, T *c, size_t m, size_t n, size_t k) {
     check_divisible(m, WG_SIZE, "M must be divisible by WG_SIZE");
     check_divisible(n, WG_SIZE, "N must be divisible by WG_SIZE");
 
-    size_t lda = k, ldb = n, ldc = n;
+    size_t lda = k, ldb = b_layout == row_major ? n : k, ldc = n;
     q.parallel_for(
         sycl::nd_range<2>{{m, n}, {WG_SIZE, WG_SIZE}},
         [=](sycl::nd_item<2> item) [[sycl::reqd_sub_group_size(SG_SIZE)]] {
@@ -73,19 +86,23 @@ void matrix_multiply_nd_range(sycl::queue &q, T *a, T *b, T *c, size_t m, size_t
 
             T sum = 0;
             for (size_t p = 0; p < k; p++) {
-                sum += mat(a, lda, i, p) * mat(b, ldb, p, j);
+                if constexpr (b_layout == row_major) {
+                    sum += mat(a, lda, i, p) * mat(b, ldb, p, j);
+                } else {
+                    sum += mat(a, lda, i, p) * mat(b, ldb, j, p);
+                }
             }
             mat(c, ldc, i, j) = sum;
         });
 }
 
-template<typename T, size_t WG_SIZE, size_t SG_SIZE, size_t WI_SIZE>
+template<typename T, size_t WG_SIZE, size_t SG_SIZE, size_t WI_SIZE, layout b_layout>
 void matrix_multiply_nd_range_vec(sycl::queue &q, T *a, T *b, T *c, size_t m, size_t n, size_t k) {
     check_divisible(m, WG_SIZE, "M must be divisible by WG_SIZE");
     check_divisible(n, WG_SIZE, "N must be divisible by WG_SIZE");
     check_divisible(k, WI_SIZE, "K must be divisible by WI_SIZE");
 
-    size_t lda = k, ldb = n, ldc = n;
+    size_t lda = k, ldb = b_layout == row_major ? n : k, ldc = n;
     q.parallel_for(
         sycl::nd_range<2>{{m, n}, {WG_SIZE, WG_SIZE}},
         [=](sycl::nd_item<2> item) [[sycl::reqd_sub_group_size(SG_SIZE)]] {
@@ -96,8 +113,12 @@ void matrix_multiply_nd_range_vec(sycl::queue &q, T *a, T *b, T *c, size_t m, si
 
             for (size_t p = 0; p < k; p += WI_SIZE) {
                 vec_a.load(0, &mat(a, lda, i, p));
-                for (int v = 0; v < WI_SIZE; ++v) {
-                    vec_b[v] = mat(b, ldb, p + v, j);
+                if constexpr (b_layout == row_major) {
+                    for (int v = 0; v < WI_SIZE; ++v) {
+                        vec_b[v] = mat(b, ldb, p + v, j);
+                    }
+                } else {
+                    vec_b.load(0, mat_ptr(b, ldb, j, p));
                 }
                 vec_c += vec_a * vec_b;
             }
@@ -110,13 +131,13 @@ void matrix_multiply_nd_range_vec(sycl::queue &q, T *a, T *b, T *c, size_t m, si
         });
 }
 
-template<typename T, size_t WG_SIZE, size_t SG_SIZE>
+template<typename T, size_t WG_SIZE, size_t SG_SIZE, layout b_layout>
 void matrix_multiply_nd_range_slm(sycl::queue &q, T *a, T *b, T *c, size_t m, size_t n, size_t k) {
     check_divisible(m, WG_SIZE, "M must be divisible by WG_SIZE");
     check_divisible(n, WG_SIZE, "N must be divisible by WG_SIZE");
     check_divisible(k, WG_SIZE, "K must be divisible by WG_SIZE");
 
-    size_t lda = k, ldb = n, ldc = n;
+    size_t lda = k, ldb = b_layout == row_major ? n : k, ldc = n;
     q.submit([&](sycl::handler &cgh) {
         sycl::local_accessor<T, 2> slm_a{{WG_SIZE, WG_SIZE}, cgh};
         sycl::local_accessor<T, 2> slm_b{{WG_SIZE, WG_SIZE}, cgh};
@@ -133,7 +154,11 @@ void matrix_multiply_nd_range_slm(sycl::queue &q, T *a, T *b, T *c, size_t m, si
                 T sum = 0;
                 for (size_t p = 0; p < k; p += WG_SIZE) {
                     slm_a[l_i][l_j] = mat(a, lda, i, p + l_j);
-                    slm_b[l_i][l_j] = mat(b, ldb, p + l_i, j);
+                    if constexpr (b_layout == row_major) {
+                        slm_b[l_i][l_j] = mat(b, ldb, p + l_i, j);
+                    } else {
+                        slm_b[l_i][l_j] = mat(b, ldb, j, p + l_i);
+                    }
 
                     item.barrier();
 
@@ -147,13 +172,13 @@ void matrix_multiply_nd_range_slm(sycl::queue &q, T *a, T *b, T *c, size_t m, si
     });
 }
 
-template<typename T, size_t WG_SIZE>
+template<typename T, size_t WG_SIZE, layout b_layout>
 void matrix_multiply_subgroup_broadcast(sycl::queue &q, T *a, T *b, T *c, size_t m, size_t n, size_t k) {
     check_divisible(m, WG_SIZE, "M must be divisible by WG_SIZE");
     check_divisible(n, WG_SIZE, "N must be divisible by WG_SIZE");
     check_divisible(k, WG_SIZE, "K must be divisible by WG_SIZE");
 
-    size_t lda = k, ldb = n, ldc = n;
+    size_t lda = k, ldb = b_layout == row_major ? n : k, ldc = n;
     q.submit([&](sycl::handler &h) {
         h.parallel_for(
             sycl::nd_range<2>{{m, n}, {WG_SIZE, WG_SIZE}},
@@ -167,7 +192,11 @@ void matrix_multiply_subgroup_broadcast(sycl::queue &q, T *a, T *b, T *c, size_t
                     T a_i_tile_j = mat(a, lda, i, t + local_j);
                     for (size_t tile_k = 0; tile_k < WG_SIZE; tile_k++) {
                         T a_i_tile_k = group_broadcast(it.get_sub_group(), a_i_tile_j, tile_k);
-                        sum += a_i_tile_k * mat(b, ldb, t + tile_k, j);
+                        if constexpr (b_layout == row_major) {
+                            sum += a_i_tile_k * mat(b, ldb, t + tile_k, j);
+                        } else {
+                            sum += a_i_tile_k * mat(b, ldb, j, t + tile_k);
+                        }
                     }
                 }
 
@@ -177,14 +206,17 @@ void matrix_multiply_subgroup_broadcast(sycl::queue &q, T *a, T *b, T *c, size_t
 }
 
 
-int main() {
+template<layout b_layout>
+void test_matrix_multiply() {
+    std::string b_major = b_layout == row_major ? "row major" : "col major";
+    std::cout << "-------------- matrix b in " << b_major << " --------------\n";
+
     using dtype = float;
     constexpr uint16_t wg_size = 32;
     constexpr uint8_t sg_size = 32;
     constexpr uint8_t wi_size = 4;
 
     size_t secs = 10;
-    size_t loop = 1000;
     size_t m = 1024, n = 1024, k = 1024; // 2G FLOPs
 
     std::vector<dtype> a(m * k), b(k * n), c(m * n);
@@ -200,17 +232,17 @@ int main() {
 
     std::cout << "matrix_multiply_ref:\n";
     benchmark_func_by_time(secs, [&]() {
-        matrix_multiply_ref<dtype>(a, b, c, m, n, k);
+        matrix_multiply_ref<dtype, b_layout>(a, b, c, m, n, k);
     });
 
     using func_t = std::function<void(sycl::queue &, dtype *, dtype *, dtype *, size_t, size_t, size_t)>;
     std::vector<std::tuple<std::string, func_t> > funcs{
-        {"matrix_multiply_mkl", matrix_multiply_mkl<dtype>},
-        {"matrix_multiply_naive", matrix_multiply_naive<dtype>},
-        {"matrix_multiply_nd_range", matrix_multiply_nd_range<dtype, wg_size, sg_size>},
-        {"matrix_multiply_nd_range_vec", matrix_multiply_nd_range_vec<dtype, wg_size, sg_size, wi_size>},
-        {"matrix_multiply_nd_range_slm", matrix_multiply_nd_range_slm<dtype, wg_size, sg_size>},
-        {"matrix_multiply_subgroup_broadcast", matrix_multiply_subgroup_broadcast<dtype, wg_size>},
+        {"matrix_multiply_mkl", matrix_multiply_mkl<dtype, b_layout>},
+        {"matrix_multiply_naive", matrix_multiply_naive<dtype, b_layout>},
+        {"matrix_multiply_nd_range", matrix_multiply_nd_range<dtype, wg_size, sg_size, b_layout>},
+        {"matrix_multiply_nd_range_vec", matrix_multiply_nd_range_vec<dtype, wg_size, sg_size, wi_size, b_layout>},
+        {"matrix_multiply_nd_range_slm", matrix_multiply_nd_range_slm<dtype, wg_size, sg_size, b_layout>},
+        {"matrix_multiply_subgroup_broadcast", matrix_multiply_subgroup_broadcast<dtype, wg_size, b_layout>},
     };
 
     for (auto [func_name,func]: funcs) {
@@ -222,4 +254,10 @@ int main() {
         });
         sycl_acc_check(q, c, d_c);
     }
+}
+
+
+int main() {
+    test_matrix_multiply<row_major>();
+    test_matrix_multiply<col_major>();
 }

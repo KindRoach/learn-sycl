@@ -5,6 +5,11 @@ T &mat(T *data, size_t ld, size_t i, size_t j) noexcept {
     return data[i * ld + j];
 }
 
+template<typename T>
+T *mat_ptr(T *data, size_t ld, size_t i, size_t j) noexcept {
+    return &data[i * ld + j];
+}
+
 
 template<typename T>
 void print_matrix(T *data, size_t m, size_t n) {
