@@ -66,3 +66,74 @@ void sycl_acc_check(sycl::queue &q, std::vector<T> &gt, T *device_ptr) {
     q.memcpy(actual.data(), device_ptr, size * sizeof(T)).wait();
     acc_check(gt, actual);
 }
+
+void sycl_print_item_info(sycl::nd_item<1> it) {
+    size_t group_range = it.get_group_range(0);
+    size_t local_range = it.get_local_range(0);
+
+    size_t group_id = it.get_group(0);
+    size_t local_id = it.get_local_id(0);
+    size_t global_id = it.get_global_id(0);
+
+    auto sg = it.get_sub_group();
+    size_t sg_size = sg.get_local_range()[0];
+    size_t sg_group_id = sg.get_group_id()[0];
+    size_t sg_local_id = sg.get_local_id()[0];
+
+    sycl::ext::oneapi::experimental::printf(
+        "nd_range=[%zu, %zu];"
+        " global_id=%zu;"
+        " g_id=%zu;"
+        " l_id=%zu;"
+        " sg_group_id=%zu;"
+        " sg_local_id=%zu;"
+        " sg_size=%zu\n",
+        group_range, local_range,
+        global_id,
+        group_id,
+        local_id,
+        sg_group_id,
+        sg_local_id,
+        sg_size
+    );
+}
+
+
+void sycl_print_item_info(sycl::nd_item<2> it) {
+    size_t group_range_x = it.get_group_range(0);
+    size_t group_range_y = it.get_group_range(1);
+
+    size_t local_range_x = it.get_local_range(0);
+    size_t local_range_y = it.get_local_range(1);
+
+    size_t group_id_x = it.get_group(0);
+    size_t group_id_y = it.get_group(1);
+
+    size_t local_id_x = it.get_local_id(0);
+    size_t local_id_y = it.get_local_id(1);
+
+    size_t global_id_x = it.get_global_id(0);
+    size_t global_id_y = it.get_global_id(1);
+
+    auto sg = it.get_sub_group();
+    size_t sg_size = sg.get_local_range()[0];
+    size_t sg_group_id = sg.get_group_id()[0];
+    size_t sg_local_id = sg.get_local_id()[0];
+
+    sycl::ext::oneapi::experimental::printf(
+        "nd_range=[(%zux%zu),(%zux%zu)];"
+        " global_id=(%zu,%zu);"
+        " g_id=(%zu,%zu);"
+        " l_id=(%zu,%zu);"
+        " sg_group_id=%zu;"
+        " sg_local_id=%zu;"
+        " sg_size=%zu\n",
+        group_range_x, group_range_y, local_range_x, local_range_y,
+        global_id_x, global_id_y,
+        group_id_x, group_id_y,
+        local_id_x, local_id_y,
+        sg_group_id,
+        sg_local_id,
+        sg_size
+    );
+}
