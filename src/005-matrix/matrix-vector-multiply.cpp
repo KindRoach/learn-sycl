@@ -1,0 +1,115 @@
+#include <sycl/sycl.hpp>
+
+#include "util/util.hpp"
+
+// A matrix: [m, n] in row-major or col-major
+// b vector: [n]
+// o = A x b^T vector : [m]
+
+template<typename T, layout a_layout>
+void matrix_vector_multiply_ref(std::vector<T> &a, std::vector<T> &b, std::vector<T> &c, size_t m, size_t n) {
+    size_t ld = a_layout == row_major ? n : m;
+    for (size_t i = 0; i < m; i++) {
+        T sum = 0;
+        for (size_t j = 0; j < n; j++) {
+            if constexpr (a_layout == row_major) {
+                sum += mat(a.data(), ld, i, j) * b[j];
+            } else {
+                sum += mat(a.data(), ld, j, i) * b[j];
+            }
+        }
+        c[i] = sum;
+    }
+}
+
+template<typename T, layout a_layout>
+void matrix_vector_multiply_naive(sycl::queue &q, T *a, T *b, T *c, size_t m, size_t n) {
+    size_t ld = a_layout == row_major ? n : m;
+    q.parallel_for(
+        sycl::range<1>(m),
+        [=](sycl::id<1> i) {
+            T sum = 0;
+            for (size_t j = 0; j < n; j++) {
+                if constexpr (a_layout == row_major) {
+                    sum += mat(a, ld, i, j) * b[j];
+                } else {
+                    sum += mat(a, ld, j, i) * b[j];
+                }
+            }
+            c[i] = sum;
+        });
+}
+
+template<typename T, layout a_layout, size_t WG_SIZE, size_t SG_SIZE>
+void matrix_vector_multiply_nd_range(sycl::queue &q, T *a, T *b, T *c, size_t m, size_t n) {
+    check_divisible(m, WG_SIZE, "M must be divisible by WG_SIZE");
+
+    size_t ld = a_layout == row_major ? n : m;
+    q.parallel_for(
+        sycl::nd_range<1>{m, WG_SIZE},
+        [=](sycl::nd_item<1> item) [[sycl::reqd_sub_group_size(SG_SIZE)]] {
+            T sum = 0;
+            size_t i = item.get_global_id();
+            for (size_t j = 0; j < n; j++) {
+                if constexpr (a_layout == row_major) {
+                    sum += mat(a, ld, i, j) * b[j];
+                } else {
+                    sum += mat(a, ld, j, i) * b[j];
+                }
+            }
+            c[i] = sum;
+        });
+}
+
+
+template<layout a_layout>
+void test_matrix_multiply() {
+    std::string a_major = a_layout == row_major ? "row major" : "col major";
+    std::cout << "-------------- matrix a in " << a_major << " --------------\n";
+
+    using dtype = float;
+    constexpr uint16_t wg_size = 32;
+    constexpr uint8_t sg_size = 32;
+    constexpr uint8_t wi_size = 4;
+
+    size_t secs = 10;
+    size_t m = 512 * 1024, n = 1024; // 1G FLOPs
+
+    std::vector<dtype> a(m * n), b(n), c(m);
+    random_fill(a);
+    random_fill(b);
+
+    sycl::queue q{gpu_selector_by_cu, sycl::property::queue::in_order()};
+    auto *d_a = sycl::malloc_device<dtype>(a.size(), q);
+    auto *d_b = sycl::malloc_device<dtype>(b.size(), q);
+    auto *d_c = sycl::malloc_device<dtype>(c.size(), q);
+    q.memcpy(d_a, a.data(), a.size() * sizeof(dtype)).wait();
+    q.memcpy(d_b, b.data(), b.size() * sizeof(dtype)).wait();
+
+    std::cout << "matrix_multiply_ref:\n";
+    benchmark_func_by_time(secs, [&]() {
+        matrix_vector_multiply_ref<dtype, a_layout>(a, b, c, m, n);
+    });
+
+    using func_t = std::function<void(sycl::queue &, dtype *, dtype *, dtype *, size_t, size_t)>;
+    std::vector<std::tuple<std::string, func_t> > funcs{
+        {"matrix_vector_multiply_naive", matrix_vector_multiply_naive<dtype, a_layout>},
+        {"matrix_vector_multiply_nd_range", matrix_vector_multiply_nd_range<dtype, a_layout, wg_size, sg_size>},
+    };
+
+    for (auto [func_name,func]: funcs) {
+        std::cout << "\n" << func_name << ":\n";
+        q.fill(d_c, dtype{0}, c.size()).wait();
+        benchmark_func_by_time(secs, [&]() {
+            func(q, d_a, d_b, d_c, m, n);
+            q.wait();
+        });
+        sycl_acc_check(q, c, d_c);
+    }
+}
+
+
+int main() {
+    test_matrix_multiply<row_major>();
+    test_matrix_multiply<col_major>();
+}
