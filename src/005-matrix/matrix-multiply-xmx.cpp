@@ -34,6 +34,11 @@ struct joint_matrix_kernel;
 
 template<typename dtype, typename acc_type, size_t WG_T_NUM, size_t TM, size_t TN, size_t TK>
 void matrix_multiply_joint(sycl::queue &q, dtype *a, dtype *b, acc_type *c, size_t m, size_t n, size_t k) {
+    check_divisible(m, TM * WG_T_NUM, "M must be divisible by TM * WG_T_NUM");
+    check_divisible(n, TN * WG_T_NUM, "N must be divisible by TN * WG_T_NUM");
+    check_divisible(k, TK, "K must be divisible by TK");
+
+    namespace matrix = sycl::ext::oneapi::experimental::matrix;
     using namespace sycl::ext::oneapi::experimental::matrix;
 
     size_t sg_size = get_sg_size<joint_matrix_kernel>(q);
@@ -54,8 +59,8 @@ void matrix_multiply_joint(sycl::queue &q, dtype *a, dtype *b, acc_type *c, size
             auto pB = sycl::multi_ptr<dtype, sycl::access::address_space::global_space>(b);
             auto pC = sycl::multi_ptr<acc_type, sycl::access::address_space::global_space>(c);
 
-            joint_matrix<sycl::sub_group, dtype, use::a, TM, TK, layout::row_major> tile_a;
-            joint_matrix<sycl::sub_group, dtype, use::b, TK, TN, layout::row_major> tile_b;
+            joint_matrix<sycl::sub_group, dtype, use::a, TM, TK, matrix::layout::row_major> tile_a;
+            joint_matrix<sycl::sub_group, dtype, use::b, TK, TN, matrix::layout::row_major> tile_b;
             joint_matrix<sycl::sub_group, acc_type, use::accumulator, TM, TN> tile_c;
 
             joint_matrix_fill(sg, tile_c, 0);
@@ -65,7 +70,7 @@ void matrix_multiply_joint(sycl::queue &q, dtype *a, dtype *b, acc_type *c, size
                 joint_matrix_mad(sg, tile_c, tile_a, tile_b, tile_c);
             }
 
-            joint_matrix_store(sg, tile_c, pC + sg_start_i * n + sg_start_j, n, layout::row_major);
+            joint_matrix_store(sg, tile_c, pC + sg_start_i * n + sg_start_j, n, matrix::layout::row_major);
         }).wait();
 }
 
