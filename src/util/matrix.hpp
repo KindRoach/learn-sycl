@@ -1,5 +1,10 @@
 #pragma once
 
+enum layout {
+    row_major,
+    col_major
+};
+
 template<typename T>
 T &mat(T *data, size_t ld, size_t i, size_t j) noexcept {
     return data[i * ld + j];

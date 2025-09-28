@@ -177,9 +177,9 @@ int main() {
     benchmark_func_by_time(secs, [&] { matrix_transpose_ref(matrix, out, m, n); });
 
     sycl::queue q{gpu_selector_by_cu, sycl::property::queue::in_order()};
-    auto *p_matrix = sycl::malloc_device<dtype>(size, q);
-    auto *p_out = sycl::malloc_device<dtype>(size, q);
-    q.memcpy(p_matrix, matrix.data(), size * sizeof(dtype)).wait();
+    auto *d_src = sycl::malloc_device<dtype>(size, q);
+    auto *d_out = sycl::malloc_device<dtype>(size, q);
+    q.memcpy(d_src, matrix.data(), size * sizeof(dtype)).wait();
 
     using func_t = std::function<void(sycl::queue &, dtype *, dtype *, size_t, size_t)>;
     std::vector<std::tuple<std::string, func_t> > funcs{
@@ -219,11 +219,14 @@ int main() {
 
     for (auto [func_name,func]: funcs) {
         std::cout << "\n" << func_name << ":\n";
-        q.fill(p_out, dtype{0}, size).wait();
+        q.fill(d_out, dtype{0}, size).wait();
         benchmark_func_by_time(secs, [&]() {
-            func(q, p_matrix, p_out, m, n);
+            func(q, d_src, d_out, m, n);
             q.wait();
         });
-        sycl_acc_check(q, out, p_out);
+        sycl_acc_check(q, out, d_out);
     }
+
+    sycl::free(d_src, q);
+    sycl::free(d_out, q);
 }

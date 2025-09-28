@@ -7,11 +7,6 @@
 // B : [k,n] in row-major or col-major
 // C = A x B : [m,n] in row-major
 
-enum layout {
-    row_major,
-    col_major
-};
-
 template<typename T, layout b_layout>
 void matrix_multiply_ref(
     std::vector<T> &a,
@@ -254,6 +249,10 @@ void test_matrix_multiply() {
         });
         sycl_acc_check(q, c, d_c);
     }
+
+    sycl::free(d_a, q);
+    sycl::free(d_b, q);
+    sycl::free(d_c, q);
 }
 
 

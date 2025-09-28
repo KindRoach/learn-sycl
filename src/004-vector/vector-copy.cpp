@@ -98,16 +98,15 @@ int main() {
     constexpr uint8_t wi_size = 4;
 
     size_t secs = 10;
-    size_t loop = 1000;
     size_t size = 100 * 1024 * 1024; // 100M elements
 
     std::vector<dtype> vec(size);
     random_fill(vec);
 
     sycl::queue q{gpu_selector_by_cu, sycl::property::queue::in_order()};
-    auto *p1 = sycl::malloc_device<dtype>(size, q);
-    auto *p2 = sycl::malloc_device<dtype>(size, q);
-    q.memcpy(p1, vec.data(), size * sizeof(dtype)).wait();
+    auto *d_src = sycl::malloc_device<dtype>(size, q);
+    auto *d_dst = sycl::malloc_device<dtype>(size, q);
+    q.memcpy(d_src, vec.data(), size * sizeof(dtype)).wait();
 
     using func_t = std::function<void(sycl::queue &, dtype *, dtype *, size_t)>;
     std::vector<std::tuple<std::string, func_t> > funcs{
@@ -120,11 +119,11 @@ int main() {
 
     for (auto [func_name,func]: funcs) {
         std::cout << "\n" << func_name << ":\n";
-        q.fill(p2, dtype{0}, size).wait();
+        q.fill(d_dst, dtype{0}, size).wait();
         benchmark_func_by_time(secs, [&]() {
-            func(q, p1, p2, size);
+            func(q, d_src, d_dst, size);
             q.wait();
         });
-        sycl_acc_check(q, vec, p2);
+        sycl_acc_check(q, vec, d_dst);
     }
 }

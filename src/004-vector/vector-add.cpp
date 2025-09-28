@@ -104,7 +104,6 @@ int main(int argc, char *argv[]) {
     constexpr uint8_t wi_size = 4;
 
     size_t secs = 10;
-    size_t loop = 1000;
     size_t size = 100 * 1024 * 1024; // 100M elements
 
     std::vector<dtype> a(size), b(size), c(size);
@@ -115,11 +114,11 @@ int main(int argc, char *argv[]) {
     benchmark_func_by_time(secs, [&] { vector_add_ref(a, b, c); });
 
     sycl::queue q{gpu_selector_by_cu, sycl::property::queue::in_order()};
-    auto *p_a = sycl::malloc_device<dtype>(size, q);
-    auto *p_b = sycl::malloc_device<dtype>(size, q);
-    auto *p_c = sycl::malloc_device<dtype>(size, q);
-    q.memcpy(p_a, a.data(), size * sizeof(dtype)).wait();
-    q.memcpy(p_b, b.data(), size * sizeof(dtype)).wait();
+    auto *d_a = sycl::malloc_device<dtype>(size, q);
+    auto *d_b = sycl::malloc_device<dtype>(size, q);
+    auto *d_c = sycl::malloc_device<dtype>(size, q);
+    q.memcpy(d_a, a.data(), size * sizeof(dtype)).wait();
+    q.memcpy(d_b, b.data(), size * sizeof(dtype)).wait();
 
     using func_t = std::function<void(sycl::queue &, dtype *, dtype *, dtype *, size_t)>;
     std::vector<std::tuple<std::string, func_t> > funcs{
@@ -132,11 +131,15 @@ int main(int argc, char *argv[]) {
 
     for (auto [func_name,func]: funcs) {
         std::cout << "\n" << func_name << ":\n";
-        q.fill(p_c, dtype{0}, size).wait();
+        q.fill(d_c, dtype{0}, size).wait();
         benchmark_func_by_time(secs, [&]() {
-            func(q, p_a, p_b, p_c, size);
+            func(q, d_a, d_b, d_c, size);
             q.wait();
         });
-        sycl_acc_check(q, c, p_c);
+        sycl_acc_check(q, c, d_c);
     }
+
+    sycl::free(d_a, q);
+    sycl::free(d_b, q);
+    sycl::free(d_c, q);
 }

@@ -107,4 +107,8 @@ int main() {
         });
         sycl_acc_check(q, c, d_c);
     }
+
+    sycl::free(d_a, q);
+    sycl::free(d_b, q);
+    sycl::free(d_c, q);
 }
