@@ -20,6 +20,7 @@ int main()
         auto global_mem_size = q.get_device().get_info<sycl::info::device::global_mem_size>();
         auto local_mem_size = q.get_device().get_info<sycl::info::device::local_mem_size>();
         auto max_work_group_size = q.get_device().get_info<sycl::info::device::max_work_group_size>();
+        auto max_alloc = q.get_device().get_info<sycl::info::device::max_mem_alloc_size>();
         auto sub_group_sizes = q.get_device().get_info<sycl::info::device::sub_group_sizes>();
 
         std::cout << "GPU Characteristics:\n";
@@ -30,8 +31,9 @@ int main()
         std::cout << "\tVector Engine count : " << numSlices * numSubslicesPerSlice * numEUsPerSubslice << "\n";
         std::cout << "\tHardware Threads per Vector Engine : " << numThreadsPerEU << "\n";
         std::cout << "\tHardware Threads count : " << numSlices * numSubslicesPerSlice * numEUsPerSubslice * numThreadsPerEU << "\n";
-        std::cout << "\tGPU Memory Size : " << global_mem_size << "\n";
-        std::cout << "\tShared Local Memory per Work-group : " << local_mem_size << "\n";
+        std::cout << "\tGPU Memory Size (MB) : " << global_mem_size / 1024 / 1024 << "\n";
+        std::cout << "\tMax Alloc Memory Size (MB) : " << max_alloc / 1024 / 1024 << "\n";
+        std::cout << "\tShared Local Memory per Work-group (KB) : " << local_mem_size / 1024 << "\n";
         std::cout << "\tMax Work-group size : " << max_work_group_size << "\n";
         print_sub_groups(device);
     }
