@@ -1,8 +1,8 @@
 #pragma once
 
-enum layout {
-    row_major,
-    col_major
+enum class layout {
+    row_major = 0,
+    col_major = 1
 };
 
 template<typename T>
