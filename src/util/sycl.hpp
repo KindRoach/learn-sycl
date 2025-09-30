@@ -2,6 +2,7 @@
 
 #include <sycl/sycl.hpp>
 
+#include "bench.hpp"
 #include "util/vector.hpp"
 
 std::string backend_to_string(sycl::backend backend) {
@@ -136,4 +137,35 @@ void sycl_print_item_info(sycl::nd_item<2> it) {
         sg_local_id,
         sg_size
     );
+}
+
+using sycl_kernel = std::function<void(sycl::queue &)>;
+
+void benchmark_sycl_kernel(
+    int num_iter, sycl::queue &queue,
+    const sycl_kernel &submitKernel,
+    double warmup_ratio = 0.1
+) {
+    if (num_iter <= 1) {
+        std::cerr << "Warning: num_iter less than 2, running kernel once.\n";
+        submitKernel(queue);
+        queue.wait();
+        return;
+    }
+
+    // Warm-up phase
+    int warm_up_iter = std::max(1, static_cast<int>(num_iter * warmup_ratio));
+    for (int i = 0; i < warm_up_iter; ++i) { submitKernel(queue); }
+    queue.wait();
+
+    // benchmark phase
+    num_iter -= warm_up_iter;
+    auto start = std::chrono::high_resolution_clock::now();
+    for (int i = 0; i < num_iter; ++i) {
+        submitKernel(queue);
+    }
+    queue.wait();
+    auto end = std::chrono::high_resolution_clock::now();
+    auto totalDuration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+    print_human_readable_timeusage(num_iter, totalDuration);
 }
