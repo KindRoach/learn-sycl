@@ -152,8 +152,12 @@ void matrix_transpose_nd_range_tile_slm(sycl::queue &q, T *in, T *out, size_t m,
                 size_t l_j = item.get_local_id(1);
 
                 slm[l_i][l_j] = mat(in, ld_in, i, j);
-                item.barrier();
-                mat(out, ld_out, j, i) = slm[l_i][l_j];
+                item.barrier(sycl::access::fence_space::local_space);
+
+                // Diagonal block mapping
+                i = item.get_group(1) * WG_SIZE + item.get_local_id(0);
+                j = item.get_group(0) * WG_SIZE + item.get_local_id(1);
+                mat(out, ld_out, i, j) = slm[l_j][l_i];
             });
     });
 }
@@ -183,34 +187,34 @@ int main() {
 
     using func_t = std::function<void(sycl::queue &, dtype *, dtype *, size_t, size_t)>;
     std::vector<std::tuple<std::string, func_t> > funcs{
-        {
-            "matrix_transpose_naive_read_continue",
-            matrix_transpose_naive_read_continue<dtype>
-        },
-        {
-            "matrix_transpose_naive_write_continue",
-            matrix_transpose_naive_write_continue<dtype>
-        },
-        {
-            "matrix_transpose_nd_range_read_continue",
-            matrix_transpose_nd_range_read_continue<dtype, wg_size, sg_size>
-        },
-        {
-            "matrix_transpose_nd_range_write_continue",
-            matrix_transpose_nd_range_write_continue<dtype, wg_size, sg_size>
-        },
-        {
-            "matrix_transpose_nd_range_read_continue_vec",
-            matrix_transpose_nd_range_read_continue_vec<dtype, wg_size, sg_size, wi_size>
-        },
-        {
-            "matrix_transpose_nd_range_write_continue_vec",
-            matrix_transpose_nd_range_write_continue_vec<dtype, wg_size, sg_size, wi_size>
-        },
-        {
-            "matrix_transpose_nd_range_tile_vec",
-            matrix_transpose_nd_range_tile_vec<dtype, wg_size, sg_size, wi_size>
-        },
+        // {
+        //     "matrix_transpose_naive_read_continue",
+        //     matrix_transpose_naive_read_continue<dtype>
+        // },
+        // {
+        //     "matrix_transpose_naive_write_continue",
+        //     matrix_transpose_naive_write_continue<dtype>
+        // },
+        // {
+        //     "matrix_transpose_nd_range_read_continue",
+        //     matrix_transpose_nd_range_read_continue<dtype, wg_size, sg_size>
+        // },
+        // {
+        //     "matrix_transpose_nd_range_write_continue",
+        //     matrix_transpose_nd_range_write_continue<dtype, wg_size, sg_size>
+        // },
+        // {
+        //     "matrix_transpose_nd_range_read_continue_vec",
+        //     matrix_transpose_nd_range_read_continue_vec<dtype, wg_size, sg_size, wi_size>
+        // },
+        // {
+        //     "matrix_transpose_nd_range_write_continue_vec",
+        //     matrix_transpose_nd_range_write_continue_vec<dtype, wg_size, sg_size, wi_size>
+        // },
+        // {
+        //     "matrix_transpose_nd_range_tile_vec",
+        //     matrix_transpose_nd_range_tile_vec<dtype, wg_size, sg_size, wi_size>
+        // },
         {
             "matrix_transpose_nd_range_tile_slm",
             matrix_transpose_nd_range_tile_slm<dtype, wg_size, sg_size>

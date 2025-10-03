@@ -155,12 +155,12 @@ void matrix_multiply_nd_range_slm(sycl::queue &q, T *a, T *b, T *c, size_t m, si
                         slm_b[l_i][l_j] = mat(b, ldb, j, p + l_i);
                     }
 
-                    item.barrier();
+                    item.barrier(sycl::access::fence_space::local_space);
 
                     for (size_t tile_k = 0; tile_k < WG_SIZE; tile_k++) {
                         sum += slm_a[l_i][tile_k] * slm_b[tile_k][l_j];
                     }
-                    item.barrier();
+                    item.barrier(sycl::access::fence_space::local_space);
                 }
                 mat(c, ldc, i, j) = sum;
             });
