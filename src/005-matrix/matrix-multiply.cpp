@@ -32,20 +32,33 @@ void matrix_multiply_ref(
 template<typename T, layout b_layout>
 void matrix_multiply_mkl(sycl::queue &q, T *a, T *b, T *c, size_t m, size_t n, size_t k) {
     try {
-        // oneMKL gemm: submits to the provided SYCL queue and returns an event.
-        oneapi::mkl::blas::gemm(
-            q,
-            oneapi::mkl::transpose::nontrans,
-            b_layout == layout::row_major ? oneapi::mkl::transpose::nontrans : oneapi::mkl::transpose::trans,
-            m, n, k,
-            1.0f,
-            a, k,
-            b, b_layout == layout::row_major ? n : k,
-            0.0f,
-            c, n);
+        if constexpr (b_layout == layout::row_major) {
+            oneapi::mkl::blas::row_major::gemm(
+                q,
+                oneapi::mkl::transpose::nontrans,
+                oneapi::mkl::transpose::nontrans,
+                m, n, k,
+                1.0f,
+                a, k,
+                b, n,
+                0.0f,
+                c, n);
+        } else {
+            oneapi::mkl::blas::column_major::gemm(
+                q,
+                oneapi::mkl::transpose::nontrans,
+                oneapi::mkl::transpose::nontrans,
+                m, n, k,
+                1.0f,
+                a, m,
+                b, k,
+                0.0f,
+                c, m);
+        }
     } catch (const std::exception &e) {
         // rethrow or handle as desired; here we convert to runtime_error with message.
-        throw std::runtime_error(std::string("oneMKL gemm failed: ") + e.what());
+        std::cout << std::string("oneMKL gemm failed: ") + e.what() + "\n";
+        exit(1);
     }
 }
 
@@ -212,7 +225,7 @@ void test_matrix_multiply() {
     constexpr uint8_t wi_size = 4;
 
     size_t secs = 10;
-    size_t m = 1024, n = 1024, k = 1024; // 2G FLOPs
+    size_t m = 2 * 1024, n = 512, k = 1024; // 4G FLOPs
 
     std::vector<dtype> a(m * k), b(k * n), c(m * n);
     random_fill(a);
