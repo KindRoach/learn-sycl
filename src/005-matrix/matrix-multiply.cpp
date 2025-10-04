@@ -247,12 +247,12 @@ void test_matrix_multiply() {
 
     using func_t = std::function<void(sycl::queue &, dtype *, dtype *, dtype *, size_t, size_t, size_t)>;
     std::vector<std::tuple<std::string, func_t> > funcs{
-        // {"matrix_multiply_mkl", matrix_multiply_mkl<dtype, b_layout>},
-        // {"matrix_multiply_naive", matrix_multiply_naive<dtype, b_layout>},
-        // {"matrix_multiply_nd_range", matrix_multiply_nd_range<dtype, wg_size, sg_size, b_layout>},
-        // {"matrix_multiply_nd_range_vec", matrix_multiply_nd_range_vec<dtype, wg_size, sg_size, wi_size, b_layout>},
+        {"matrix_multiply_mkl", matrix_multiply_mkl<dtype, b_layout>},
+        {"matrix_multiply_naive", matrix_multiply_naive<dtype, b_layout>},
+        {"matrix_multiply_nd_range", matrix_multiply_nd_range<dtype, wg_size, sg_size, b_layout>},
+        {"matrix_multiply_nd_range_vec", matrix_multiply_nd_range_vec<dtype, wg_size, sg_size, wi_size, b_layout>},
         {"matrix_multiply_nd_range_slm", matrix_multiply_nd_range_slm<dtype, wg_size, sg_size, b_layout>},
-        // {"matrix_multiply_subgroup_broadcast", matrix_multiply_subgroup_broadcast<dtype, wg_size, b_layout>},
+        {"matrix_multiply_subgroup_broadcast", matrix_multiply_subgroup_broadcast<dtype, wg_size, b_layout>},
     };
 
     for (auto [func_name,func]: funcs) {

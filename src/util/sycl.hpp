@@ -167,5 +167,5 @@ void benchmark_sycl_kernel(
     queue.wait();
     auto end = std::chrono::high_resolution_clock::now();
     auto totalDuration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-    print_human_readable_timeusage(num_iter, totalDuration);
+    print_human_readable_time_usage(num_iter, totalDuration);
 }

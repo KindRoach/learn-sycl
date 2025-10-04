@@ -4,15 +4,14 @@
 #include <functional>
 #include <iostream>
 
-void print_human_readable_timeusage(int numIterations, std::chrono::microseconds totalDuration) {
-    double throughput = numIterations / (totalDuration.count() / 1000000.0);
+void print_human_readable_time_usage(int numIterations, std::chrono::microseconds totalDuration) {
     double avgDurationMicroSec = totalDuration.count() / static_cast<double>(numIterations);
     if (avgDurationMicroSec < 1000) {
-        std::cout << throughput << " iter/s @ avg: " << avgDurationMicroSec << " us" << "\n";
+        std::cout << numIterations << " iters @ avg: " << avgDurationMicroSec << " us" << "\n";
     } else if (avgDurationMicroSec < 1000000) {
-        std::cout << throughput << " iter/s @ avg: " << avgDurationMicroSec / 1000.0 << " ms" << "\n";
+        std::cout << numIterations << " iters @ avg: " << avgDurationMicroSec / 1000.0 << " ms" << "\n";
     } else {
-        std::cout << throughput << " iter/s @ avg: " << avgDurationMicroSec / 1000000.0 << " s" << "\n";
+        std::cout << numIterations << " iters @ avg: " << avgDurationMicroSec / 1000000.0 << " s" << "\n";
     }
 }
 
@@ -41,7 +40,7 @@ void benchmark_func(
     }
     auto end = std::chrono::high_resolution_clock::now();
     auto totalDuration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-    print_human_readable_timeusage(num_iter, totalDuration);
+    print_human_readable_time_usage(num_iter, totalDuration);
 }
 
 void benchmark_func_by_time(
@@ -77,5 +76,5 @@ void benchmark_func_by_time(
     auto end = clock::now();
 
     auto totalDuration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-    print_human_readable_timeusage(num_iter, totalDuration);
+    print_human_readable_time_usage(num_iter, totalDuration);
 }
