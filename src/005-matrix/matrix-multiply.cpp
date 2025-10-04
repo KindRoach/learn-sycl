@@ -148,7 +148,7 @@ void matrix_multiply_nd_range_slm(sycl::queue &q, T *a, T *b, T *c, size_t m, si
     size_t lda = k, ldb = b_layout == layout::row_major ? n : k, ldc = n;
     q.submit([&](sycl::handler &cgh) {
         sycl::local_accessor<T, 2> slm_a{{WG_SIZE, WG_SIZE}, cgh};
-        sycl::local_accessor<T, 2> slm_b{{WG_SIZE, WG_SIZE}, cgh};
+        sycl::local_accessor<T, 2> slm_b{{WG_SIZE, WG_SIZE + 1}, cgh}; // avoid bank conflict for b in col_major.
 
         cgh.parallel_for(
             sycl::nd_range<2>{{m, n}, {WG_SIZE, WG_SIZE}},
@@ -165,7 +165,9 @@ void matrix_multiply_nd_range_slm(sycl::queue &q, T *a, T *b, T *c, size_t m, si
                     if constexpr (b_layout == layout::row_major) {
                         slm_b[l_i][l_j] = mat(b, ldb, p + l_i, j);
                     } else {
-                        slm_b[l_i][l_j] = mat(b, ldb, j, p + l_i);
+                        // Diagonal block mapping, equivalent to:
+                        // slm_b[l_i][l_j] = mat(b, ldb, j, p + l_i);
+                        slm_b[l_j][l_i] = mat(b, ldb, item.get_group(1) * WG_SIZE + l_i, p + l_j);
                     }
 
                     item.barrier(sycl::access::fence_space::local_space);
@@ -225,7 +227,7 @@ void test_matrix_multiply() {
     constexpr uint8_t wi_size = 4;
 
     size_t secs = 10;
-    size_t m = 2 * 1024, n = 512, k = 1024; // 4G FLOPs
+    size_t m = 2 * 1024, n = 512, k = 1024;
 
     std::vector<dtype> a(m * k), b(k * n), c(m * n);
     random_fill(a);
@@ -245,12 +247,12 @@ void test_matrix_multiply() {
 
     using func_t = std::function<void(sycl::queue &, dtype *, dtype *, dtype *, size_t, size_t, size_t)>;
     std::vector<std::tuple<std::string, func_t> > funcs{
-        {"matrix_multiply_mkl", matrix_multiply_mkl<dtype, b_layout>},
-        {"matrix_multiply_naive", matrix_multiply_naive<dtype, b_layout>},
-        {"matrix_multiply_nd_range", matrix_multiply_nd_range<dtype, wg_size, sg_size, b_layout>},
-        {"matrix_multiply_nd_range_vec", matrix_multiply_nd_range_vec<dtype, wg_size, sg_size, wi_size, b_layout>},
+        // {"matrix_multiply_mkl", matrix_multiply_mkl<dtype, b_layout>},
+        // {"matrix_multiply_naive", matrix_multiply_naive<dtype, b_layout>},
+        // {"matrix_multiply_nd_range", matrix_multiply_nd_range<dtype, wg_size, sg_size, b_layout>},
+        // {"matrix_multiply_nd_range_vec", matrix_multiply_nd_range_vec<dtype, wg_size, sg_size, wi_size, b_layout>},
         {"matrix_multiply_nd_range_slm", matrix_multiply_nd_range_slm<dtype, wg_size, sg_size, b_layout>},
-        {"matrix_multiply_subgroup_broadcast", matrix_multiply_subgroup_broadcast<dtype, wg_size, b_layout>},
+        // {"matrix_multiply_subgroup_broadcast", matrix_multiply_subgroup_broadcast<dtype, wg_size, b_layout>},
     };
 
     for (auto [func_name,func]: funcs) {

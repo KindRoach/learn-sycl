@@ -95,7 +95,7 @@ void test_matrix_multiply() {
     using acc_type = float;
 
     size_t secs = 10;
-    size_t m = 2 * 1024, n = 512, k = 1024; // 4G FLOPs
+    size_t m = 2 * 1024, n = 512, k = 1024;
 
     std::vector<dtype> a(m * k), b(k * n);
     std::vector<acc_type> c(m * n);
