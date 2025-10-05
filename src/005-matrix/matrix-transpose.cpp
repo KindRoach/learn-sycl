@@ -78,7 +78,7 @@ void matrix_transpose_nd_range_read_continue_vec(sycl::queue &q, T *in, T *out, 
             size_t i = item.get_global_id(0);
             size_t j = item.get_global_id(1) * WI_SIZE;
             sycl::vec<T, WI_SIZE> vec;
-            vec.load(0, &mat(in, ld_in, i, j));
+            vec.load(0, mat_ptr(in, ld_in, i, j));
             for (size_t k = 0; k < WI_SIZE; ++k) {
                 mat(out, ld_out, j + k, i) = vec[k];
             }
@@ -100,7 +100,7 @@ void matrix_transpose_nd_range_write_continue_vec(sycl::queue &q, T *in, T *out,
             for (size_t k = 0; k < WI_SIZE; ++k) {
                 vec[k] = mat(in, ld_in, j + k, i);
             }
-            vec.store(0, &mat(out, ld_out, i, j));
+            vec.store(0, mat_ptr(out, ld_out, i, j));
         });
 }
 
@@ -118,7 +118,7 @@ void matrix_transpose_nd_range_tile_vec(sycl::queue &q, T *in, T *out, size_t m,
 
             sycl::vec<T, WI_SIZE> vec[WI_SIZE];
             for (size_t k = 0; k < WI_SIZE; ++k) {
-                vec[k].load(0, &mat(in, ld_in, i + k, j));
+                vec[k].load(0, mat_ptr(in, ld_in, i + k, j));
             }
 
             // in-place transpose of WI_SIZE x WI_SIZE block
@@ -129,7 +129,7 @@ void matrix_transpose_nd_range_tile_vec(sycl::queue &q, T *in, T *out, size_t m,
             }
 
             for (size_t k = 0; k < WI_SIZE; ++k) {
-                vec[k].store(0, &mat(out, ld_out, j + k, i));
+                vec[k].store(0, mat_ptr(out, ld_out, j + k, i));
             }
         });
 }

@@ -120,7 +120,7 @@ void matrix_multiply_nd_range_vec(sycl::queue &q, T *a, T *b, T *c, size_t m, si
             sycl::vec<T, WI_SIZE> vec_a, vec_b, vec_c{0};
 
             for (size_t p = 0; p < k; p += WI_SIZE) {
-                vec_a.load(0, &mat(a, lda, i, p));
+                vec_a.load(0, mat_ptr(a, lda, i, p));
                 if constexpr (b_layout == layout::row_major) {
                     for (int v = 0; v < WI_SIZE; ++v) {
                         vec_b[v] = mat(b, ldb, p + v, j);
