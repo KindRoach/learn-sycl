@@ -38,10 +38,10 @@ void matrix_multiply_mkl(sycl::queue &q, T *a, T *b, T *c, size_t m, size_t n, s
                 oneapi::mkl::transpose::nontrans,
                 oneapi::mkl::transpose::nontrans,
                 m, n, k,
-                1.0f,
+                static_cast<T>(1),
                 a, k,
                 b, n,
-                0.0f,
+                static_cast<T>(0),
                 c, n);
         } else {
             oneapi::mkl::blas::column_major::gemm(
@@ -49,10 +49,10 @@ void matrix_multiply_mkl(sycl::queue &q, T *a, T *b, T *c, size_t m, size_t n, s
                 oneapi::mkl::transpose::nontrans,
                 oneapi::mkl::transpose::nontrans,
                 m, n, k,
-                1.0f,
+                static_cast<T>(1),
                 a, m,
                 b, k,
-                0.0f,
+                static_cast<T>(0),
                 c, m);
         }
     } catch (const std::exception &e) {
@@ -221,7 +221,7 @@ void test_matrix_multiply() {
     std::string b_major = b_layout == layout::row_major ? "row major" : "col major";
     std::cout << "-------------- matrix b in " << b_major << " --------------\n";
 
-    using dtype = float;
+    using dtype = int;
     constexpr uint16_t wg_size = 32;
     constexpr uint8_t sg_size = 32;
     constexpr uint8_t wi_size = 4;
