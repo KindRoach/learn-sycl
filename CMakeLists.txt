@@ -48,7 +48,7 @@ foreach (file_path ${sources})
     add_executable("${target_name}" "${file_path}")
 
     # Include the src directory for headers
-    target_include_directories("${target_name}" PRIVATE src)
+    target_include_directories("${target_name}" PRIVATE "${src_root}")
 
     # Enable SYCL support for this target
     add_sycl_to_target(TARGET "${target_name}" SOURCES "${file_path}")
