@@ -221,7 +221,7 @@ void test_matrix_multiply() {
     std::string b_major = b_layout == layout::row_major ? "row major" : "col major";
     std::cout << "-------------- matrix b in " << b_major << " --------------\n";
 
-    using dtype = int;
+    using dtype = float;
     constexpr uint16_t wg_size = 32;
     constexpr uint8_t sg_size = 32;
     constexpr uint8_t wi_size = 4;
