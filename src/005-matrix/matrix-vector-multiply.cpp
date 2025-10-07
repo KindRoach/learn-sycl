@@ -152,6 +152,7 @@ void matrix_vector_multiply_row_split_slm(sycl::queue& q, T* a, T* b, T* c, size
 
                     item.barrier(sycl::access::fence_space::local_space);
                     sum += slm[l_i][l_j] * b[k + l_j];
+                    item.barrier(sycl::access::fence_space::local_space);
                 }
 
                 auto sg = item.get_sub_group();
