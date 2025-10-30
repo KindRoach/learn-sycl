@@ -1,9 +1,11 @@
+#include <cpp-bench-utils/sycl-utils.hpp>
 #include <sycl/device.hpp>
 
-#include "util/util.hpp"
+#include "cpp-bench-utils/utils.hpp"
 
 
 int main() {
+    using namespace cbu;
     for (const auto &device: sycl::device::get_devices()) {
         std::cout << "Device: " << std::endl
                 << "\tName: " << device.get_info<sycl::info::device::name>() << std::endl

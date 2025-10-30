@@ -1,6 +1,6 @@
 #include <sycl/sycl.hpp>
 
-#include "util/util.hpp"
+#include "cpp-bench-utils/utils.hpp"
 
 inline std::string to_string(sycl::ext::oneapi::experimental::matrix::matrix_type type) {
     using namespace sycl::ext::oneapi::experimental::matrix;
@@ -25,7 +25,7 @@ inline std::string to_string(sycl::ext::oneapi::experimental::matrix::matrix_typ
 int main() {
     namespace matrix = sycl::ext::oneapi::experimental::matrix;
     namespace info = sycl::ext::oneapi::experimental::info;
-    sycl::queue q{gpu_selector_by_cu};
+    sycl::queue q{cbu::gpu_selector_by_cu};
     std::vector<matrix::combination> combinations = q.get_device().get_info<info::device::matrix_combinations>();
 
     if (combinations.empty()) {

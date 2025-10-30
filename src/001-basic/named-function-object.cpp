@@ -1,6 +1,6 @@
 #include <sycl/sycl.hpp>
 
-#include "util/util.hpp"
+#include "cpp-bench-utils/utils.hpp"
 
 class MyKernel {
 public:
@@ -17,7 +17,7 @@ private:
 };
 
 int main() {
-    sycl::queue q{gpu_selector_by_cu};
+    sycl::queue q{cbu::gpu_selector_by_cu};
 
     q.submit([](sycl::handler &h) {
         sycl::stream stream(65536, 256, h);

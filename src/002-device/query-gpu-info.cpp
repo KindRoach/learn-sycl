@@ -1,10 +1,10 @@
 #include <sycl/sycl.hpp>
 
-#include "util/util.hpp"
+#include "cpp-bench-utils/utils.hpp"
 
 int main()
 {
-
+    using namespace cbu;
     for (const auto &device : sycl::device::get_devices())
     {
         if (device.get_info<sycl::info::device::device_type>() != sycl::info::device_type::gpu)

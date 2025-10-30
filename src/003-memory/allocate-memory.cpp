@@ -1,6 +1,6 @@
 #include <sycl/sycl.hpp>
 
-#include "util/util.hpp"
+#include "cpp-bench-utils/utils.hpp"
 
 template<typename T>
 void test_mem(sycl::queue &q, T *device_prt, size_t size) {
@@ -23,7 +23,7 @@ void test_mem(sycl::queue &q, T *device_prt, size_t size) {
 }
 
 int main() {
-    sycl::queue q{gpu_selector_by_cu};
+    sycl::queue q{cbu::gpu_selector_by_cu};
 
     using dtype = float;
     size_t size = 8;

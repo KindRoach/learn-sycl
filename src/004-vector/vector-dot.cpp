@@ -1,7 +1,8 @@
 #include <iostream>
 #include <numeric>
+#include <sycl/sycl.hpp>
 
-#include "util/util.hpp"
+#include "cpp-bench-utils/utils.hpp"
 
 template<typename T>
 void vector_dot_ref(const std::vector<T> &a, const std::vector<T> &b, std::vector<T> &out) {
@@ -32,7 +33,7 @@ template<
     size_t SG_SIZE
 >
 void vector_sum_group_reduce_atomic_collect(sycl::queue &q, T *a, T *b, T *out, size_t size) {
-    check_divisible(size, WG_SIZE, "Global size must be divisible by work-group size");
+    cbu::check_divisible(size, WG_SIZE, "Global size must be divisible by work-group size");
 
     q.single_task([=]() {
         out[0] = T{0};
@@ -61,7 +62,7 @@ template<
     size_t WI_SIZE
 >
 void vector_sum_group_reduce_atomic_collect_vec(sycl::queue &q, T *a, T *b, T *out, size_t size) {
-    check_divisible(size, WG_SIZE * WI_SIZE, "Size must be divisible by WG_SIZE * WI_SIZE");
+    cbu::check_divisible(size, WG_SIZE * WI_SIZE, "Size must be divisible by WG_SIZE * WI_SIZE");
 
     q.single_task([=]() {
         out[0] = T{0};
@@ -96,6 +97,7 @@ void vector_sum_group_reduce_atomic_collect_vec(sycl::queue &q, T *a, T *b, T *o
 
 
 int main() {
+    using namespace cbu;
     using dtype = float;
     constexpr uint16_t wg_size = 256;
     constexpr uint8_t sg_size = 32;

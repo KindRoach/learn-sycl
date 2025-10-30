@@ -1,6 +1,6 @@
 #include <sycl/sycl.hpp>
 
-#include "util/util.hpp"
+#include "cpp-bench-utils/utils.hpp"
 
 namespace xmx = sycl::ext::oneapi::experimental::matrix;
 
@@ -11,6 +11,7 @@ void matrix_multiply_ref(
     std::vector<acc_type>& c,
     size_t m, size_t n, size_t k)
 {
+    using namespace cbu;
     size_t lda = k, ldb = b_layout == xmx::layout::row_major ? n : k, ldc = n;
     for (size_t i = 0; i < m; i++)
     {
@@ -45,6 +46,7 @@ struct matrix_multiply_joint_kernel;
 template <typename dtype, typename acc_type, xmx::layout b_layout, size_t WG_T_NUM, size_t TM, size_t TN, size_t TK>
 void matrix_multiply_joint(sycl::queue& q, dtype* a, dtype* b, acc_type* c, size_t m, size_t n, size_t k)
 {
+    using namespace cbu;
     check_divisible(m, TM * WG_T_NUM, "M must be divisible by TM * WG_T_NUM");
     check_divisible(n, TN * WG_T_NUM, "N must be divisible by TN * WG_T_NUM");
     check_divisible(k, TK, "K must be divisible by TK");
@@ -92,6 +94,7 @@ void matrix_multiply_joint(sycl::queue& q, dtype* a, dtype* b, acc_type* c, size
 template <xmx::layout b_layout>
 void test_matrix_multiply()
 {
+    using namespace cbu;
     std::string b_major = b_layout == xmx::layout::row_major ? "row major" : "col major";
     std::cout << "-------------- matrix b in " << b_major << " --------------\n";
 

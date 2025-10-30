@@ -1,7 +1,6 @@
 #include <sycl/sycl.hpp>
 
-#include "util/util.hpp"
-
+#include "cpp-bench-utils/utils.hpp"
 
 template<int WG_SIZE, int SG_SIZE>
 void print_sub_group_mapping_1d(sycl::queue &q) {
@@ -13,7 +12,7 @@ void print_sub_group_mapping_1d(sycl::queue &q) {
         h.parallel_for(
             nd_range(range{WG_SIZE * 2}, range{WG_SIZE}),
             [out](nd_item<1> it) [[sycl::reqd_sub_group_size(SG_SIZE)]] {
-                sycl_print_item_info(it);
+                cbu::sycl_print_item_info(it);
             });
     }).wait();
 }
@@ -28,7 +27,7 @@ void print_sub_group_mapping_2d(sycl::queue &q) {
         h.parallel_for(
             nd_range(range{WG_SIZE * 2, WG_SIZE * 2}, range{WG_SIZE, WG_SIZE}),
             [=](nd_item<2> it) [[sycl::reqd_sub_group_size(SG_SIZE)]] {
-                sycl_print_item_info(it);
+                cbu::sycl_print_item_info(it);
             });
     }).wait();
 }
@@ -36,7 +35,7 @@ void print_sub_group_mapping_2d(sycl::queue &q) {
 
 int main() {
     using namespace sycl;
-    queue q{gpu_selector_by_cu};
+    queue q{cbu::gpu_selector_by_cu};
     print_sub_group_mapping_1d<64, 16>(q);
     print_sub_group_mapping_1d<64, 32>(q);
     print_sub_group_mapping_2d<8, 16>(q);

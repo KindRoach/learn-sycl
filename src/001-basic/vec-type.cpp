@@ -1,6 +1,6 @@
 #include <sycl/sycl.hpp>
 
-#include "util/util.hpp"
+#include "cpp-bench-utils/utils.hpp"
 
 template<typename T, uint8_t SIZE>
 void test_vec(sycl::queue &q, T *p, size_t m, size_t n) {
@@ -23,7 +23,7 @@ void test_vec(sycl::queue &q, T *p, size_t m, size_t n) {
 int main() {
     using dtype = float;
     size_t m = 8, n = 8;
-    sycl::queue q{gpu_selector_by_cu};
+    sycl::queue q{cbu::gpu_selector_by_cu};
     auto *p = sycl::malloc_device<dtype>(m * n, q);
 
     // init matrix

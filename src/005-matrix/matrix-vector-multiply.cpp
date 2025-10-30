@@ -1,21 +1,22 @@
 #include <sycl/sycl.hpp>
 
-#include "util/util.hpp"
+#include "cpp-bench-utils/utils.hpp"
 
 // A matrix: [m, n] in row-major or col-major
 // b vector: [n]
 // o = A x b^T vector : [m]
 
-template <typename T, layout a_layout>
+template <typename T, cbu::matrix_layout a_layout>
 void matrix_vector_multiply_ref(std::vector<T>& a, std::vector<T>& b, std::vector<T>& c, size_t m, size_t n)
 {
-    size_t ld = a_layout == layout::row_major ? n : m;
+    using namespace cbu;
+    size_t ld = a_layout == matrix_layout::row_major ? n : m;
     for (size_t i = 0; i < m; i++)
     {
         T sum = 0;
         for (size_t k = 0; k < n; k++)
         {
-            if constexpr (a_layout == layout::row_major)
+            if constexpr (a_layout == matrix_layout::row_major)
             {
                 sum += mat(a.data(), ld, i, k) * b[k];
             }
@@ -28,10 +29,11 @@ void matrix_vector_multiply_ref(std::vector<T>& a, std::vector<T>& b, std::vecto
     }
 }
 
-template <typename T, layout a_layout>
+template <typename T, cbu::matrix_layout a_layout>
 void matrix_vector_multiply_naive(sycl::queue& q, T* a, T* b, T* c, size_t m, size_t n)
 {
-    size_t ld = a_layout == layout::row_major ? n : m;
+    using namespace cbu;
+    size_t ld = a_layout == matrix_layout::row_major ? n : m;
     q.parallel_for(
         sycl::range<1>(m),
         [=](sycl::id<1> i)
@@ -39,7 +41,7 @@ void matrix_vector_multiply_naive(sycl::queue& q, T* a, T* b, T* c, size_t m, si
             T sum = 0;
             for (size_t k = 0; k < n; k++)
             {
-                if constexpr (a_layout == layout::row_major)
+                if constexpr (a_layout == matrix_layout::row_major)
                 {
                     sum += mat(a, ld, i, k) * b[k];
                 }
@@ -52,12 +54,13 @@ void matrix_vector_multiply_naive(sycl::queue& q, T* a, T* b, T* c, size_t m, si
         });
 }
 
-template <typename T, layout a_layout, size_t WG_SIZE, size_t SG_SIZE>
+template <typename T, cbu::matrix_layout a_layout, size_t WG_SIZE, size_t SG_SIZE>
 void matrix_vector_multiply_nd_range(sycl::queue& q, T* a, T* b, T* c, size_t m, size_t n)
 {
+    using namespace cbu;
     check_divisible(m, WG_SIZE, "M must be divisible by WG_SIZE");
 
-    size_t ld = a_layout == layout::row_major ? n : m;
+    size_t ld = a_layout == matrix_layout::row_major ? n : m;
     q.parallel_for(
         sycl::nd_range<1>{m, WG_SIZE},
         [=](sycl::nd_item<1> item) [[sycl::reqd_sub_group_size(SG_SIZE)]]
@@ -66,7 +69,7 @@ void matrix_vector_multiply_nd_range(sycl::queue& q, T* a, T* b, T* c, size_t m,
             size_t i = item.get_global_id();
             for (size_t k = 0; k < n; k++)
             {
-                if constexpr (a_layout == layout::row_major)
+                if constexpr (a_layout == matrix_layout::row_major)
                 {
                     sum += mat(a, ld, i, k) * b[k];
                 }
@@ -79,13 +82,14 @@ void matrix_vector_multiply_nd_range(sycl::queue& q, T* a, T* b, T* c, size_t m,
         });
 }
 
-template <typename T, layout a_layout, size_t WG_SIZE, size_t SG_SIZE>
+template <typename T, cbu::matrix_layout a_layout, size_t WG_SIZE, size_t SG_SIZE>
 void matrix_vector_multiply_row_split_sg(sycl::queue& q, T* a, T* b, T* c, size_t m, size_t n)
 {
+    using namespace cbu;
     check_divisible(m, WG_SIZE, "M must be divisible by WG_SIZE");
     check_divisible(n, SG_SIZE, "N must be divisible by SG_SIZE");
 
-    size_t ld = a_layout == layout::row_major ? n : m;
+    size_t ld = a_layout == matrix_layout::row_major ? n : m;
     q.parallel_for(
         sycl::nd_range<2>{{m, SG_SIZE}, {WG_SIZE, SG_SIZE}},
         [=](sycl::nd_item<2> item) [[sycl::reqd_sub_group_size(SG_SIZE)]]
@@ -98,7 +102,7 @@ void matrix_vector_multiply_row_split_sg(sycl::queue& q, T* a, T* b, T* c, size_
             T sum = 0;
             for (size_t k = 0; k < n; k += SG_SIZE)
             {
-                if constexpr (a_layout == layout::row_major)
+                if constexpr (a_layout == matrix_layout::row_major)
                 {
                     sum += mat(a, ld, i, k + sg_i) * b[k + sg_i];
                 }
@@ -117,14 +121,15 @@ void matrix_vector_multiply_row_split_sg(sycl::queue& q, T* a, T* b, T* c, size_
         });
 }
 
-template <typename T, layout a_layout, size_t WG_SIZE, size_t SG_SIZE>
+template <typename T, cbu::matrix_layout a_layout, size_t WG_SIZE, size_t SG_SIZE>
 void matrix_vector_multiply_row_split_slm(sycl::queue& q, T* a, T* b, T* c, size_t m, size_t n)
 {
+    using namespace cbu;
     check_divisible(m, WG_SIZE, "M must be divisible by WG_SIZE");
     check_divisible(n, SG_SIZE, "N must be divisible by SG_SIZE");
     static_assert(WG_SIZE == SG_SIZE, "WG_SIZE must be equal to SG_SIZE");
 
-    size_t ld = a_layout == layout::row_major ? n : m;
+    size_t ld = a_layout == matrix_layout::row_major ? n : m;
     q.submit([&](sycl::handler& h)
     {
         sycl::local_accessor<T, 2> slm{{WG_SIZE, WG_SIZE + 1}, h}; // avoid bank conflict
@@ -139,7 +144,7 @@ void matrix_vector_multiply_row_split_slm(sycl::queue& q, T* a, T* b, T* c, size
                 T sum = 0;
                 for (size_t k = 0; k < n; k += SG_SIZE)
                 {
-                    if constexpr (a_layout == layout::row_major)
+                    if constexpr (a_layout == matrix_layout::row_major)
                     {
                         slm[l_i][l_j] = mat(a, ld, g_i * WG_SIZE + l_i, k + l_j);
                     }
@@ -166,12 +171,13 @@ void matrix_vector_multiply_row_split_slm(sycl::queue& q, T* a, T* b, T* c, size
     });
 }
 
-template <typename T, layout a_layout, size_t WG_SIZE, size_t SG_SIZE>
+template <typename T, cbu::matrix_layout a_layout, size_t WG_SIZE, size_t SG_SIZE>
 void matrix_vector_multiply_row_split_wg(sycl::queue& q, T* a, T* b, T* c, size_t m, size_t n)
 {
+    using namespace cbu;
     check_divisible(n, WG_SIZE, "N must be divisible by WG_SIZE");
 
-    size_t ld = a_layout == layout::row_major ? n : m;
+    size_t ld = a_layout == matrix_layout::row_major ? n : m;
     size_t ele_per_sg = n / (WG_SIZE / SG_SIZE);
     q.parallel_for(
         sycl::nd_range<2>{{m, WG_SIZE}, {1, WG_SIZE}},
@@ -188,7 +194,7 @@ void matrix_vector_multiply_row_split_wg(sycl::queue& q, T* a, T* b, T* c, size_
             T sum = 0;
             for (size_t k = start_id; k < end_id; k += SG_SIZE)
             {
-                if constexpr (a_layout == layout::row_major)
+                if constexpr (a_layout == matrix_layout::row_major)
                 {
                     sum += mat(a, ld, i, k + sg_i) * b[k + sg_i];
                 }
@@ -208,10 +214,11 @@ void matrix_vector_multiply_row_split_wg(sycl::queue& q, T* a, T* b, T* c, size_
 }
 
 
-template <layout a_layout>
+template <cbu::matrix_layout a_layout>
 void test_matrix_multiply()
 {
-    std::string a_major = a_layout == layout::row_major ? "row major" : "col major";
+    using namespace cbu;
+    std::string a_major = a_layout == matrix_layout::row_major ? "row major" : "col major";
     std::cout << "-------------- matrix a in " << a_major << " --------------\n";
 
     using dtype = float;
@@ -262,6 +269,6 @@ void test_matrix_multiply()
 
 int main()
 {
-    test_matrix_multiply<layout::row_major>();
-    test_matrix_multiply<layout::col_major>();
+    test_matrix_multiply<cbu::matrix_layout::row_major>();
+    test_matrix_multiply<cbu::matrix_layout::col_major>();
 }

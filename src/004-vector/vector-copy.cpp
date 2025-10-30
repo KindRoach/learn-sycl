@@ -1,6 +1,6 @@
 #include <sycl/sycl.hpp>
 
-#include "util/util.hpp"
+#include "cpp-bench-utils/utils.hpp"
 
 template<typename T>
 void vector_copy_naive(sycl::queue &q, T *src, T *out, size_t size) {
@@ -16,7 +16,7 @@ template<
     size_t SG_SIZE
 >
 void vector_copy_nd_range(sycl::queue &q, T *src, T *out, size_t size) {
-    check_divisible(size, WG_SIZE, "Global size must be divisible by work-group size");
+    cbu::check_divisible(size, WG_SIZE, "Global size must be divisible by work-group size");
 
     q.parallel_for(
         sycl::nd_range<1>{size, WG_SIZE},
@@ -33,7 +33,7 @@ template<
     size_t WI_SIZE
 >
 void vector_copy_workitem_continuous(sycl::queue &q, T *src, T *out, size_t size) {
-    check_divisible(size, WG_SIZE * WI_SIZE, "Size must be divisible by WG_SIZE * WI_SIZE");
+    cbu::check_divisible(size, WG_SIZE * WI_SIZE, "Size must be divisible by WG_SIZE * WI_SIZE");
 
     q.parallel_for(
         sycl::nd_range<1>{size / WI_SIZE, WG_SIZE},
@@ -54,7 +54,7 @@ template<
     size_t WI_SIZE
 >
 void vector_copy_with_vec(sycl::queue &q, T *src, T *out, size_t size) {
-    check_divisible(size, WG_SIZE * WI_SIZE, "Size must be divisible by WG_SIZE * WI_SIZE");
+    cbu::check_divisible(size, WG_SIZE * WI_SIZE, "Size must be divisible by WG_SIZE * WI_SIZE");
 
     q.parallel_for(
         sycl::nd_range<1>{size / WI_SIZE, WG_SIZE},
@@ -73,7 +73,7 @@ template<
     size_t WI_SIZE
 >
 void vector_copy_subgroup_continuous(sycl::queue &q, T *src, T *out, size_t size) {
-    check_divisible(size, WG_SIZE * WI_SIZE, "Size must be divisible by WG_SIZE * WI_SIZE");
+    cbu::check_divisible(size, WG_SIZE * WI_SIZE, "Size must be divisible by WG_SIZE * WI_SIZE");
 
     q.parallel_for(
         sycl::nd_range<1>{size / WI_SIZE, WG_SIZE},
@@ -92,6 +92,7 @@ void vector_copy_subgroup_continuous(sycl::queue &q, T *src, T *out, size_t size
 }
 
 int main() {
+    using namespace cbu;
     using dtype = float;
     constexpr uint16_t wg_size = 256;
     constexpr uint8_t sg_size = 32;

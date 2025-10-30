@@ -1,6 +1,6 @@
 #include <sycl/sycl.hpp>
 
-#include "util/util.hpp"
+#include "cpp-bench-utils/utils.hpp"
 
 template<typename T, uint16_t WG_SIZE>
 void test_local_memory(sycl::queue &q) {
@@ -27,6 +27,6 @@ void test_local_memory(sycl::queue &q) {
 int main() {
     using dtype = float;
     constexpr uint16_t wg_size = 8;
-    sycl::queue q{gpu_selector_by_cu};
+    sycl::queue q{cbu::gpu_selector_by_cu};
     test_local_memory<dtype, wg_size>(q);
 }
