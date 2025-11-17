@@ -7,16 +7,6 @@
 
 
 template<typename T>
-void matrix_transpose_ref(std::vector<T> &in, std::vector<T> &out, size_t m, size_t n) {
-    size_t ld_in = n, ld_out = m;
-    for (size_t i = 0; i < m; ++i) {
-        for (size_t j = 0; j < n; ++j) {
-            cbu::mat(out.data(), ld_out, j, i) = cbu::mat(in.data(), ld_in, i, j);
-        }
-    }
-}
-
-template<typename T>
 void matrix_transpose_naive_read_continue(sycl::queue &q, T *in, T *out, size_t m, size_t n) {
     size_t ld_in = n, ld_out = m;
     q.parallel_for({m, n}, [=](sycl::id<2> idx) {
