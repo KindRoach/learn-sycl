@@ -6,29 +6,30 @@ namespace xmx = sycl::ext::oneapi::experimental::matrix;
 
 template <typename dtype, typename acc_type, xmx::layout b_layout>
 void matrix_multiply_ref(
-    std::vector<dtype>& a,
-    std::vector<dtype>& b,
-    std::vector<acc_type>& c,
+    sycl::queue& q,
+    dtype *a, dtype *b, acc_type *c,
     size_t m, size_t n, size_t k)
 {
     using namespace cbu;
     size_t lda = k, ldb = b_layout == xmx::layout::row_major ? n : k, ldc = n;
-    for (size_t i = 0; i < m; i++)
+    q.parallel_for({m, n}, [=](sycl::id<2> idx)
     {
-        for (size_t j = 0; j < n; j++)
+        size_t i = idx[0];
+        size_t j = idx[1];
+        acc_type sum = 0;
+        for (size_t p = 0; p < k; p++)
         {
-            acc_type sum = 0;
-            for (size_t p = 0; p < k; p++)
+            if constexpr (b_layout == xmx::layout::row_major)
             {
-                acc_type a_ele = static_cast<acc_type>(mat(a.data(), lda, i, p));
-                acc_type b_ele = static_cast<acc_type>(mat(b.data(), ldb,
-                                                           b_layout == xmx::layout::row_major ? p : j,
-                                                           b_layout == xmx::layout::row_major ? j : p));
-                sum += a_ele * b_ele;
+                sum += mat(a, lda, i, p) * mat(b, ldb, p, j);
             }
-            mat(c.data(), ldc, i, j) = sum;
+            else
+            {
+                sum += mat(a, lda, i, p) * mat(b, ldb, j, p);
+            }
         }
-    }
+        mat(c, ldc, i, j) = sum;
+    });
 }
 
 template <typename KernelName>
@@ -105,14 +106,14 @@ void test_matrix_multiply()
     size_t m = 2 * 1024, n = 512, k = 1024;
 
     std::vector<dtype> a(m * k), b(k * n);
-    std::vector<acc_type> c(m * n);
     random_fill(a);
     random_fill(b);
 
     sycl::queue q{gpu_selector_by_cu, sycl::property::queue::in_order()};
     auto* d_a = sycl::malloc_device<dtype>(a.size(), q);
     auto* d_b = sycl::malloc_device<dtype>(b.size(), q);
-    auto* d_c = sycl::malloc_device<acc_type>(c.size(), q);
+    auto* d_c_ref = sycl::malloc_device<acc_type>(m * n, q);
+    auto* d_c = sycl::malloc_device<acc_type>(m * n, q);
     q.memcpy(d_a, a.data(), a.size() * sizeof(dtype)).wait();
     q.memcpy(d_b, b.data(), b.size() * sizeof(dtype)).wait();
 
@@ -123,7 +124,8 @@ void test_matrix_multiply()
     };
     benchmark_func_by_time(secs, [&]()
     {
-        matrix_multiply_ref<dtype, acc_type, b_layout>(a, b, c, m, n, k);
+        matrix_multiply_ref<dtype, acc_type, b_layout>(q, d_a, d_b, d_c_ref, m, n, k);
+        q.wait();
     }, opt);
 
     using func_t = std::function<void(sycl::queue&, dtype*, dtype*, acc_type*, size_t, size_t, size_t)>;
@@ -134,13 +136,13 @@ void test_matrix_multiply()
     for (auto [func_name,func] : funcs)
     {
         std::cout << "\n" << func_name << ":\n";
-        q.fill(d_c, dtype{0}, c.size()).wait();
+        q.fill(d_c, dtype{0}, m*n).wait();
         benchmark_func_by_time(secs, [&]()
         {
             func(q, d_a, d_b, d_c, m, n, k);
             q.wait();
         }, opt);
-        sycl_acc_check(q, c, d_c);
+        sycl_acc_check(q, d_c_ref, d_c, m * n);
     }
 
     sycl::free(d_a, q);
