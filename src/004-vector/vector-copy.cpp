@@ -124,6 +124,8 @@ int main() {
         benchmark_func_by_time(secs, [&]() {
             func(q, d_src, d_dst, size);
             q.wait();
+        }, {
+            .total_mem_bytes = size * sizeof(dtype) * 2
         });
         sycl_acc_check(q, vec, d_dst);
     }

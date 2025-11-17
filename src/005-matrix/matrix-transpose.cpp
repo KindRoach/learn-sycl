@@ -175,7 +175,10 @@ int main() {
     random_fill(matrix);
 
     std::cout << "matrix_transpose_ref:\n";
-    benchmark_func_by_time(secs, [&] { matrix_transpose_ref(matrix, out, m, n); });
+    BenchmarkOptions opt{
+        .total_mem_bytes = 2 * m * n * sizeof(dtype),
+    };
+    benchmark_func_by_time(secs, [&] { matrix_transpose_ref(matrix, out, m, n); }, opt);
 
     sycl::queue q{gpu_selector_by_cu, sycl::property::queue::in_order()};
     auto *d_src = sycl::malloc_device<dtype>(size, q);
@@ -224,7 +227,7 @@ int main() {
         benchmark_func_by_time(secs, [&]() {
             func(q, d_src, d_out, m, n);
             q.wait();
-        });
+        }, opt);
         sycl_acc_check(q, out, d_out);
     }
 

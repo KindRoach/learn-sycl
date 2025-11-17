@@ -111,7 +111,11 @@ int main() {
     random_fill(b);
 
     std::cout << "vector_sum_ref:\n";
-    benchmark_func_by_time(secs, [&] { vector_dot_ref(a, b, out); });
+    BenchmarkOptions opt{
+        .total_mem_bytes = size * sizeof(dtype) * 2,
+        .total_flop = size * 2,
+    };
+    benchmark_func_by_time(secs, [&] { vector_dot_ref(a, b, out); }, opt);
 
     sycl::queue q{gpu_selector_by_cu, sycl::property::queue::in_order()};
     auto *d_a = sycl::malloc_device<dtype>(size, q);
@@ -142,7 +146,7 @@ int main() {
         benchmark_func_by_time(secs, [&]() {
             func(q, d_a, d_b, d_out, size);
             q.wait();
-        });
+        }, opt);
         sycl_acc_check(q, out, d_out);
     }
 

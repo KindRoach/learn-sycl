@@ -239,10 +239,14 @@ void test_matrix_multiply()
     q.memcpy(d_b, b.data(), b.size() * sizeof(dtype)).wait();
 
     std::cout << "matrix_vector_multiply_ref:\n";
+    BenchmarkOptions opt{
+        .total_mem_bytes = (m * n + n + m) * sizeof(dtype),
+        .total_flop = 2 * m * n,
+    };
     benchmark_func_by_time(secs, [&]()
     {
         matrix_vector_multiply_ref<dtype, a_layout>(a, b, c, m, n);
-    });
+    }, opt);
 
     using func_t = std::function<void(sycl::queue&, dtype*, dtype*, dtype*, size_t, size_t)>;
     std::vector<std::tuple<std::string, func_t>> funcs{
@@ -261,7 +265,7 @@ void test_matrix_multiply()
         {
             func(q, d_a, d_b, d_c, m, n);
             q.wait();
-        });
+        }, opt);
         sycl_acc_check(q, c, d_c);
     }
 }
