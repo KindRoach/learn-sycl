@@ -1,5 +1,8 @@
 FROM intel/oneapi:latest
 
+# Install dependencies for metrics-discovery
+RUN apt-get update && apt-get install -y ninja-build
+
 # setup metrics-discovery for VTune
 RUN apt-get update && apt-get -y install libdrm-dev
 
