@@ -1,0 +1,11 @@
+{
+    "name": "learn-sycl Dev Container (WSL)",
+    "build": {
+        "dockerfile": "../Dockerfile"
+    },
+    "runArgs": [
+        "--device=/dev/dgx",
+        "-v=/usr/lib/wsl:/usr/lib/wsl",
+        "--privileged"
+    ]
+}

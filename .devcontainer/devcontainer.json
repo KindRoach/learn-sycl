@@ -1,9 +1,0 @@
-{
-  "name": "Learn-sycl Dev Container",
-  "build": {
-    "dockerfile": "Dockerfile"
-  },
-  "runArgs": [
-    "--device=/dev/dri"
-  ]
-}
